@@ -33,8 +33,14 @@ SOURCE_APP_VALIDATE = "agentcore_notifier"
 SOURCE_TYPE_VALIDATE = "channel_validate"
 
 
-def _validate_webhook_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Send minimal test to webhook. Returns { success, error? }. Records."""
+def _validate_webhook_config(
+    config: Dict[str, Any],
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Send minimal test to webhook. Returns { success, error? }. Records.
+    user_id: optional operator (e.g. request.user.pk) for the validate action.
+    """
     url = (config.get("url") or "").strip()
     if not url:
         return {"success": False, "error": _("Webhook URL not configured")}
@@ -62,7 +68,7 @@ def _validate_webhook_config(config: Dict[str, Any]) -> Dict[str, Any]:
             source_id="",
             channel=Channel.WEBHOOK,
             channel_link_id=None,
-            user_id=None,
+            user_id=user_id,
             provider_type=provider_type,
             payload=test_payload,
             status=record_status,
@@ -91,11 +97,12 @@ def _validate_webhook_config(config: Dict[str, Any]) -> Dict[str, Any]:
 def _validate_email_config(
     config: Dict[str, Any],
     test_recipient: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Test SMTP: connect (and optional STARTTLS/login). If test_recipient
     is given, send one test email; from_email must be in config.
-    Returns { success, error? }.
+    Returns { success, error? }. user_id: optional operator for the action.
     """
     host = (config.get("smtp_host") or "").strip()
     if not host:
@@ -138,7 +145,7 @@ def _validate_email_config(
                 source_id="",
                 channel=Channel.EMAIL,
                 channel_link_id=None,
-                user_id=None,
+                user_id=user_id,
                 provider_type=Provider.EMAIL,
                 payload=payload_record,
                 status=Status.SUCCESS,
@@ -166,7 +173,7 @@ def _validate_email_config(
                 source_id="",
                 channel=Channel.EMAIL,
                 channel_link_id=None,
-                user_id=None,
+                user_id=user_id,
                 provider_type=Provider.EMAIL,
                 payload=payload_record,
                 status=Status.FAILED,
@@ -410,12 +417,16 @@ class ChannelValidateView(APIView):
                 {"detail": "config must be an object"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if getattr(request.user, "is_authenticated", True):
+            user_id = getattr(request.user, "pk", None)
+        else:
+            user_id = None
         if channel_type == NotificationChannel.TYPE_WEBHOOK:
-            out = _validate_webhook_config(config)
+            out = _validate_webhook_config(config, user_id=user_id)
         else:
             test_recipient = (data.get("test_recipient") or "").strip() or None
             out = _validate_email_config(
-                config, test_recipient=test_recipient
+                config, test_recipient=test_recipient, user_id=user_id
             )
         if out.get("success"):
             return Response({"success": True})

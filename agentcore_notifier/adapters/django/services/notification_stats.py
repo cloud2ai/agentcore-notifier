@@ -6,10 +6,11 @@ all buckets always present, fill 0 when no data.
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.db.models.functions import ExtractHour, ExtractMonth, TruncDate
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 
 from agentcore_notifier.adapters.django.models import NotificationRecord
 from agentcore_notifier.constants import PROVIDER_DISPLAY_NAMES, Status
@@ -18,12 +19,19 @@ from agentcore_notifier.constants import PROVIDER_DISPLAY_NAMES, Status
 def _parse_date(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
+    s = (value or "").strip()
+    if "T" not in s and " " not in s and len(s) <= 10:
+        d = parse_date(s)
+        if d:
+            dt = timezone.make_aware(datetime.combine(d, datetime.min.time()))
+            return dt
+        return None
     try:
-        dt = parse_datetime(value)
+        dt = parse_datetime(s)
         if dt:
             return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
         return timezone.make_aware(
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            datetime.fromisoformat(s.replace("Z", "+00:00"))
         )
     except (ValueError, TypeError):
         return None
@@ -102,6 +110,28 @@ def get_notification_stats_from_query(
         "by_provider": by_provider,
     }
 
+    if start_date and end_date and end_date > start_date:
+        delta = end_date - start_date
+        end_prev = start_date - timedelta(microseconds=1)
+        start_prev = end_prev - delta
+        qs_prev = NotificationRecord.objects.all()
+        if user_id is not None:
+            qs_prev = qs_prev.filter(user_id=user_id)
+        qs_prev = qs_prev.filter(
+            created_at__gte=start_prev,
+            created_at__lte=end_prev,
+        )
+        prev_agg = qs_prev.aggregate(
+            total=Count("id"),
+            total_sent=Count("id", filter=Q(status=Status.SUCCESS)),
+            total_failed=Count("id", filter=Q(status=Status.FAILED)),
+        )
+        result["summary_prev"] = {
+            "total": prev_agg["total"] or 0,
+            "total_sent": prev_agg["total_sent"] or 0,
+            "total_failed": prev_agg["total_failed"] or 0,
+        }
+
     if granularity in ("day", "month", "year"):
         result["series"] = _build_series_fixed_buckets(
             qs, granularity, start_date, end_date
@@ -118,7 +148,9 @@ def _build_series_fixed_buckets(
 ) -> List[Dict[str, Any]]:
     """
     Build series with fixed buckets; fill 0 for missing buckets.
-    day -> 24 hours (0-23); month -> 30 days; year -> 12 months.
+    day -> 24 hour buckets for the selected day (single day);
+    month -> one bucket per day in the selected month;
+    year -> 12 months in the selected year.
     """
     tz = timezone.get_current_timezone()
     if not start_date and end_date:
@@ -131,14 +163,15 @@ def _build_series_fixed_buckets(
         start_date = end_date
 
     if granularity == "day":
-        day_start = start_date.replace(
+        day_start = end_date.replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         if timezone.is_naive(day_start):
             day_start = timezone.make_aware(day_start, tz)
+        day_end = day_start + timedelta(days=1)
         day_qs = qs.filter(
             created_at__gte=day_start,
-            created_at__lt=day_start + timedelta(days=1),
+            created_at__lt=day_end,
         )
         hour_counts = dict(
             day_qs.annotate(hour=ExtractHour("created_at"))
@@ -171,23 +204,49 @@ def _build_series_fixed_buckets(
         ]
 
     if granularity == "month":
-        end_d = end_date.date() if hasattr(end_date, "date") else end_date
-        start_d = end_d - timedelta(days=29)
-        day_list = [start_d + timedelta(days=i) for i in range(30)]
+        start_d = (
+            start_date.date()
+            if hasattr(start_date, "date")
+            else start_date
+        )
+        end_d = (
+            end_date.date()
+            if hasattr(end_date, "date")
+            else end_date
+        )
+        num_days = (end_d - start_d).days + 1
+        if num_days <= 0:
+            num_days = 1
+            end_d = start_d
+        day_list = [start_d + timedelta(days=i) for i in range(num_days)]
         rows = list(
             qs.annotate(d=TruncDate("created_at"))
             .values("d")
-            .annotate(count=Count("id"))
-            .values_list("d", "count")
+            .annotate(
+                count=Count("id"),
+                success=Count("id", filter=Q(status=Status.SUCCESS)),
+                failed=Count("id", filter=Q(status=Status.FAILED)),
+            )
+            .values_list("d", "count", "success", "failed")
         )
-        date_counts = {}
-        for d_val, cnt in rows:
+        by_date = {}
+        for row in rows:
+            d_val, cnt, succ, fail = row
             if d_val is None:
                 continue
             d_date = d_val.date() if hasattr(d_val, "date") else d_val
-            date_counts[d_date] = cnt
+            by_date[d_date] = {
+                "count": cnt,
+                "success": succ,
+                "failed": fail,
+            }
         return [
-            {"bucket": d.isoformat(), "count": date_counts.get(d, 0)}
+            {
+                "bucket": d.isoformat(),
+                "count": by_date.get(d, {}).get("count", 0),
+                "success": by_date.get(d, {}).get("success", 0),
+                "failed": by_date.get(d, {}).get("failed", 0),
+            }
             for d in day_list
         ]
 
@@ -197,20 +256,31 @@ def _build_series_fixed_buckets(
             if hasattr(end_date, "year")
             else timezone.now().year
         )
-        month_counts = dict(
+        month_rows = list(
             qs.annotate(month=ExtractMonth("created_at"))
             .values("month")
-            .annotate(count=Count("id"))
-            .values_list("month", "count")
+            .annotate(
+                count=Count("id"),
+                success=Count("id", filter=Q(status=Status.SUCCESS)),
+                failed=Count("id", filter=Q(status=Status.FAILED)),
+            )
+            .values_list("month", "count", "success", "failed")
         )
+        by_month = {}
+        for row in month_rows:
+            m, cnt, succ, fail = row
+            if m is not None:
+                by_month[m] = {"count": cnt, "success": succ, "failed": fail}
         month_labels = [
             "01", "02", "03", "04", "05", "06",
             "07", "08", "09", "10", "11", "12",
         ]
         return [
             {
-                "bucket": f"{year}-{month_labels[m-1]}",
-                "count": month_counts.get(m, 0),
+                "bucket": f"{year}-{month_labels[m - 1]}",
+                "count": by_month.get(m, {}).get("count", 0),
+                "success": by_month.get(m, {}).get("success", 0),
+                "failed": by_month.get(m, {}).get("failed", 0),
             }
             for m in range(1, 13)
         ]
@@ -254,3 +324,29 @@ def get_notification_record_list_from_query(
         "page_size": page_size,
         "results": records,
     }
+
+
+def get_notification_user_list() -> List[Dict[str, Any]]:
+    """
+    Return list of users that have at least one NotificationRecord.
+    Used for stats/records user scope dropdown.
+    """
+    User = get_user_model()
+    user_ids = (
+        NotificationRecord.objects.filter(user_id__isnull=False)
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
+    users = User.objects.filter(pk__in=user_ids).order_by("pk")
+    out = []
+    for u in users:
+        display = (
+            getattr(u, "username", None)
+            or getattr(u, "email", None)
+            or getattr(u, "nickname", None)
+            or f"#{u.pk}"
+        )
+        if isinstance(display, str):
+            display = (display or "").strip() or f"#{u.pk}"
+        out.append({"user_id": u.pk, "display": str(display)})
+    return out

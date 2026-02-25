@@ -8,6 +8,7 @@ from django.urls import path
 from agentcore_notifier.adapters.django.views import (
     AdminNotificationRecordListView,
     AdminNotificationStatsView,
+    AdminNotificationUserListView,
     GlobalConfigView,
     SilenceRulesView,
     NotificationChannelListView,
@@ -25,6 +26,11 @@ urlpatterns = [
         "notification-records/",
         AdminNotificationRecordListView.as_view(),
         name="notifier-records",
+    ),
+    path(
+        "users/",
+        AdminNotificationUserListView.as_view(),
+        name="notifier-users",
     ),
     path(
         "channels/",

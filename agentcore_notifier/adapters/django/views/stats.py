@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from agentcore_notifier.adapters.django.services.notification_stats import (
     get_notification_record_list_from_query,
     get_notification_stats_from_query,
+    get_notification_user_list,
 )
 from agentcore_notifier.constants import PROVIDER_DISPLAY_NAMES
 
@@ -47,4 +48,17 @@ class AdminNotificationRecordListView(APIView):
                 "user_id": r.user_id,
             })
         data["results"] = out
+        return Response(data)
+
+
+class AdminNotificationUserListView(APIView):
+    """
+    GET: List users that have at least one notification record.
+    Used for stats/records user scope dropdown. Returns [{"user_id": int, "display": str}].
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        data = get_notification_user_list()
         return Response(data)

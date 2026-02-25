@@ -2,6 +2,7 @@
 from agentcore_notifier.adapters.django.views.stats import (
     AdminNotificationRecordListView,
     AdminNotificationStatsView,
+    AdminNotificationUserListView,
 )
 from agentcore_notifier.adapters.django.views.config import (
     GlobalConfigView,
@@ -16,6 +17,7 @@ from agentcore_notifier.adapters.django.views.channels import (
 __all__ = [
     "AdminNotificationStatsView",
     "AdminNotificationRecordListView",
+    "AdminNotificationUserListView",
     "GlobalConfigView",
     "SilenceRulesView",
     "NotificationChannelListView",

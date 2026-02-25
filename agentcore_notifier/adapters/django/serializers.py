@@ -15,6 +15,7 @@ class NotificationStatsResponseSerializer(serializers.Serializer):
     summary = NotificationSummarySerializer()
     by_source = serializers.ListField(child=serializers.DictField())
     by_provider = serializers.ListField(child=serializers.DictField())
+    summary_prev = serializers.DictField(required=False, allow_null=True)
     series = serializers.ListField(
         child=serializers.DictField(),
         required=False,
