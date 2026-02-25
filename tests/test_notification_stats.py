@@ -122,7 +122,7 @@ class TestGetNotificationStatsFromQuery:
         assert out["series"][0]["bucket"] == "00:00"
         assert out["series"][23]["bucket"] == "23:00"
 
-    def test_series_month_returns_30_buckets(self):
+    def test_series_month_returns_one_bucket_per_day(self):
         out = notification_stats.get_notification_stats_from_query(
             {
                 "granularity": "month",
@@ -131,7 +131,7 @@ class TestGetNotificationStatsFromQuery:
             }
         )
         assert "series" in out
-        assert len(out["series"]) == 30
+        assert len(out["series"]) == 28
 
     def test_series_year_returns_12_buckets(self):
         out = notification_stats.get_notification_stats_from_query(

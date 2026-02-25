@@ -53,6 +53,7 @@ def cleanup_old_notification_records(
     if only_completed:
         base_qs = base_qs.filter(status__in=(Status.SUCCESS, Status.FAILED))
 
+    # Delete in one go or in batches
     if batch_size is None or batch_size <= 0:
         deleted_count, _ = base_qs.delete()
         total_deleted = deleted_count

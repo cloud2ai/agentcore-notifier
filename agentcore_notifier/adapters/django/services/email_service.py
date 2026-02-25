@@ -28,7 +28,7 @@ def get_default_email_channel():
     """
     Get the email channel used for sending: among active channels, the one
     with smallest ordering (then earliest created_at).
-    Returns (channel, config_dict) or (None, None).
+    Returns (channel, config) or (None, None).
     """
     qs = NotificationChannel.objects.filter(
         channel_type=NotificationChannel.TYPE_EMAIL,
@@ -41,7 +41,7 @@ def get_default_email_channel():
     host = (cfg.get("smtp_host") or "").strip()
     if not host:
         return None, None
-    config_dict = {
+    config = {
         "smtp_host": host,
         "smtp_port": int(cfg.get("smtp_port") or 587),
         "use_tls": cfg.get("use_tls", True),
@@ -51,7 +51,7 @@ def get_default_email_channel():
         "from_name": (cfg.get("from_name") or "").strip() or None,
         "subject_prefix": (cfg.get("subject_prefix") or "").strip() or None,
     }
-    return channel, config_dict
+    return channel, config
 
 
 class EmailService:
@@ -61,8 +61,9 @@ class EmailService:
     """
 
     def get_email_channel_and_config(self):
-        """Return (channel, config_dict) for the active email channel."""
-        return get_default_email_channel()
+        """Return (channel, config) for the active email channel."""
+        channel, config = get_default_email_channel()
+        return channel, config
 
     def _send_smtp(
         self,

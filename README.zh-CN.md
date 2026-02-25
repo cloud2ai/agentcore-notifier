@@ -49,6 +49,26 @@ pip install -e path/to/agentcore-notifier
 
 ---
 
+## 默认渠道辅助函数
+
+`get_default_webhook_channel()` 与 `get_default_email_channel()`（位于
+`adapters.django.services.webhook_service` 与 `email_service`）均返回
+`(channel, config_dict)` 或 `(None, None)`。
+
+- **channel**：当前生效的 `NotificationChannel` 实例（或 None）。
+- **config_dict**：由 `channel.config` 构建的字典（webhook 为 url/headers 等，
+  邮件为 smtp_host/from_email 等），或 None。
+
+解包时请统一命名，避免与使用翻译的模块中的 gettext `_` 冲突：
+
+- 两个都要：`channel, config = get_default_webhook_channel()`
+- 只要 channel：`channel, _config = get_default_webhook_channel()`
+- 只要 config：`_channel, config = get_default_webhook_channel()`
+
+`get_default_email_channel()` 用法相同。
+
+---
+
 ## 发送通知
 
 仅通过 **Celery 任务**发送（无 HTTP 发送接口）。任务会执行静默与合并检查，再调用 WebhookService 并写入 NotificationRecord。

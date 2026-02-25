@@ -29,7 +29,7 @@ def get_default_webhook_channel():
     """
     Get webhook channel for sending: active channels, smallest ordering then
     earliest created_at. No "default" flag; ordering determines which.
-    Returns (channel, config_dict) or (None, None).
+    Returns (channel, config) or (None, None).
     """
     qs = NotificationChannel.objects.filter(
         channel_type=NotificationChannel.TYPE_WEBHOOK,
@@ -42,7 +42,7 @@ def get_default_webhook_channel():
     url = (cfg.get("url") or "").strip()
     if not url:
         return None, None
-    config_dict = {
+    config = {
         "is_active": True,
         "provider": cfg.get("provider_type") or DEFAULT_PROVIDER_TYPE,
         "url": url,
@@ -53,12 +53,12 @@ def get_default_webhook_channel():
         "sign_secret": (cfg.get("sign_secret") or "").strip() or None,
         "timeout": cfg.get("timeout"),
     }
-    return channel, config_dict
+    return channel, config
 
 
 def _get_webhook_config() -> Optional[Dict[str, Any]]:
     """Get active webhook config dict (for backward compat)."""
-    _, config = get_default_webhook_channel()
+    _channel, config = get_default_webhook_channel()
     return config
 
 
@@ -79,15 +79,16 @@ class WebhookService:
         return self._webhook_config
 
     def get_webhook_channel_and_config(self):
-        """Return (channel, config_dict) for active webhook or (None, None)."""
-        return get_default_webhook_channel()
+        """Return (channel, config) for active webhook or (None, None)."""
+        channel, config = get_default_webhook_channel()
+        return channel, config
 
     def _get_config(self) -> Optional[Dict[str, Any]]:
         config = self.get_webhook_config()
         if not config:
             logger.warning(
-                "WebhookService: no active webhook channel in "
-                "NotificationChannel table"
+                f"WebhookService._get_config: no active webhook channel in "
+                f"NotificationChannel table"
             )
         return config
 

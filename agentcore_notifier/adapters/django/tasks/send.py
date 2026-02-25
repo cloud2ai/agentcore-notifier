@@ -73,10 +73,11 @@ def send_webhook_notification(
     Send webhook notification. Merge and silence are read from the active
     webhook channel's config; then WebhookService.send is called.
     """
-    channel, _ = get_default_webhook_channel()
+    channel, _config = get_default_webhook_channel()
     channel_id = channel.id if channel else None
     channel_config = (channel.config or {}) if channel else {}
 
+    # Resolve silence window from channel config
     silence_window = None
     if channel_config:
         try:
@@ -112,6 +113,7 @@ def send_webhook_notification(
             )
             return {"skipped": True, "reason": "silenced"}
 
+    # Resolve merge settings from channel or global config
     merge_enabled = (
         channel_config.get("merge_enabled") if channel_config else False
     )
@@ -150,6 +152,7 @@ def send_webhook_notification(
             )
             return {"skipped": True, "reason": "merged"}
 
+    # Send via WebhookService and return result
     svc = WebhookService()
     user = None if user_id is None else _user_from_id(user_id)
     result = svc.send(
@@ -189,9 +192,11 @@ def send_email_notification(
     Send email notification. Uses default email channel (SMTP). Optional
     silence window from channel config; then EmailService.send is called.
     """
-    channel, _ = get_default_email_channel()
+    channel, _config = get_default_email_channel()
     channel_id = channel.id if channel else None
     channel_config = (channel.config or {}) if channel else {}
+
+    # Resolve silence window from channel config
     silence_window = None
     if channel_config:
         try:
@@ -226,6 +231,8 @@ def send_email_notification(
                 channel=Channel.EMAIL,
             )
             return {"skipped": True, "reason": "silenced"}
+
+    # Send via EmailService and return result
     svc = EmailService()
     user = None if user_id is None else _user_from_id(user_id)
     result = svc.send(

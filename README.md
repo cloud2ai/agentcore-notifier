@@ -49,6 +49,27 @@ Configure via:
 
 ---
 
+## Default channel helpers
+
+`get_default_webhook_channel()` and `get_default_email_channel()` (in
+`adapters.django.services.webhook_service` and `email_service`) both return
+`(channel, config_dict)` or `(None, None)`.
+
+- **channel**: the active `NotificationChannel` instance (or None).
+- **config_dict**: a dict built from `channel.config` (url/headers for webhook;
+  smtp_host/from_email etc. for email), or None.
+
+When unpacking, use consistent names so call sites stay clear and do not
+shadow gettext `_` in modules that use translation:
+
+- Need both: `channel, config = get_default_webhook_channel()`
+- Need only channel: `channel, _config = get_default_webhook_channel()`
+- Need only config: `_channel, config = get_default_webhook_channel()`
+
+Same pattern for `get_default_email_channel()`.
+
+---
+
 ## Sending notifications
 
 Send only via **Celery task** (no HTTP send API). The task runs silence and merge checks, then calls WebhookService and writes NotificationRecord.

@@ -2,12 +2,12 @@
 Global config for agentcore_notifier (cleanup, merge). Not user-specific.
 Uses lazy imports of notification_config to avoid circular import.
 """
-from django.conf import settings
-
 try:
     from celery.schedules import crontab
 except ImportError:
     crontab = None
+
+from django.conf import settings
 
 DEFAULT_RETENTION_DAYS = 180
 DEFAULT_CLEANUP_ONLY_COMPLETED = True
@@ -103,7 +103,7 @@ def get_cleanup_beat_schedule(interval_hours=None):
         "agentcore-notifier-cleanup-old-records": {
             "task": task_name,
             "schedule": schedule,
-            "options": {"queue": "default"},
+            "options": {},
         }
     }
 
@@ -133,7 +133,7 @@ def get_cleanup_beat_schedule_init(interval_hours=None):
         "agentcore-notifier-cleanup-old-records": {
             "task": task_name,
             "schedule": schedule,
-            "options": {"queue": "default"},
+            "options": {},
         }
     }
 
