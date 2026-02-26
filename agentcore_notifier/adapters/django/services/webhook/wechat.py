@@ -43,7 +43,7 @@ class WeChatWebhookDriver(BaseWebhookDriver):
             )
             response.raise_for_status()
             data = response.json()
-            logger.info("WeChatWebhookDriver: sent successfully")
+            logger.info(f"WeChatWebhookDriver: sent successfully")
             return {"success": True, "response": data, "error": None}
         except requests.exceptions.RequestException as e:
             logger.error(f"WeChatWebhookDriver: failed: {e}")

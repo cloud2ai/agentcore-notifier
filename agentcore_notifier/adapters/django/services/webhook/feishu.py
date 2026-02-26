@@ -98,7 +98,7 @@ class FeishuWebhookDriver(BaseWebhookDriver):
                     f"FeishuWebhookDriver: API error code={code} msg={err_msg}"
                 )
                 return {"success": False, "response": data, "error": err_msg}
-            logger.info("FeishuWebhookDriver: sent successfully")
+            logger.info(f"FeishuWebhookDriver: sent successfully")
             return {"success": True, "response": data, "error": None}
         except requests.exceptions.RequestException as e:
             logger.error(f"FeishuWebhookDriver: failed: {e}")

@@ -193,9 +193,9 @@ def _validate_email_config(
         err_lower = err_msg.lower()
         if "no route to host" in err_lower or "errno 113" in err_lower:
             base_msg = _(
-                "Server cannot reach SMTP host (no route). Check deployment: "
-                "firewall/security group outbound rules, or container network. "
-                "Original: "
+                "Server cannot reach SMTP host (no route). "
+                "Check deployment: firewall/security group outbound, "
+                "or container network. Original: "
             )
             return {"success": False, "error": f"{base_msg}{err_msg}"}
         if "timed out" in err_lower or "timeout" in err_lower:

@@ -1,5 +1,6 @@
 """Views for agentcore_notifier API."""
 from agentcore_notifier.adapters.django.views.stats import (
+    AdminNotificationRecordDetailView,
     AdminNotificationRecordListView,
     AdminNotificationStatsView,
     AdminNotificationUserListView,
@@ -16,6 +17,7 @@ from agentcore_notifier.adapters.django.views.channels import (
 
 __all__ = [
     "AdminNotificationStatsView",
+    "AdminNotificationRecordDetailView",
     "AdminNotificationRecordListView",
     "AdminNotificationUserListView",
     "GlobalConfigView",

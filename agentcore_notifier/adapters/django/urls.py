@@ -6,6 +6,7 @@ Include under admin prefix, e.g.:
 from django.urls import path
 
 from agentcore_notifier.adapters.django.views import (
+    AdminNotificationRecordDetailView,
     AdminNotificationRecordListView,
     AdminNotificationStatsView,
     AdminNotificationUserListView,
@@ -26,6 +27,11 @@ urlpatterns = [
         "notification-records/",
         AdminNotificationRecordListView.as_view(),
         name="notifier-records",
+    ),
+    path(
+        "notification-records/<uuid:uuid>/",
+        AdminNotificationRecordDetailView.as_view(),
+        name="notifier-record-detail",
     ),
     path(
         "users/",
