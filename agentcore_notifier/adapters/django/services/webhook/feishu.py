@@ -13,7 +13,7 @@ import hmac
 import hashlib
 import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -49,6 +49,29 @@ def _apply_message_prefix(
     out = copy.deepcopy(payload)
     out["text"] = {**out.get("text", {}), "text": prefix + text_obj["text"]}
     return out
+
+
+def _extract_business_error(
+    data: Dict[str, Any],
+) -> tuple[bool, Optional[str]]:
+    """
+    Extract provider business error from common response code fields.
+    Returns (is_error, error_message).
+    """
+    if not isinstance(data, dict):
+        return False, None
+    for key in ("code", "StatusCode", "errcode"):
+        code = data.get(key)
+        if isinstance(code, int):
+            if code == 0:
+                return False, None
+            msg = (
+                data.get("msg")
+                or data.get("errmsg")
+                or f"Webhook error code {code}"
+            )
+            return True, str(msg)
+    return False, None
 
 
 class FeishuWebhookDriver(BaseWebhookDriver):
@@ -91,11 +114,10 @@ class FeishuWebhookDriver(BaseWebhookDriver):
             )
             response.raise_for_status()
             data = response.json()
-            code = data.get("code", 0)
-            if code != 0:
-                err_msg = data.get("msg") or f"Feishu error code {code}"
+            is_error, err_msg = _extract_business_error(data)
+            if is_error:
                 logger.warning(
-                    f"FeishuWebhookDriver: API error code={code} msg={err_msg}"
+                    f"FeishuWebhookDriver: business error msg={err_msg}"
                 )
                 return {"success": False, "response": data, "error": err_msg}
             logger.info(f"FeishuWebhookDriver: sent successfully")

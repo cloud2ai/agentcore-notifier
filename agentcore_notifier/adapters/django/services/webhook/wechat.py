@@ -1,5 +1,4 @@
 """WeChat Work webhook driver."""
-import copy
 import logging
 from typing import Any, Dict
 
@@ -8,7 +7,7 @@ import requests
 from agentcore_notifier.constants import DEFAULT_TIMEOUT
 
 from .base import BaseWebhookDriver
-from .feishu import _apply_message_prefix
+from .feishu import _apply_message_prefix, _extract_business_error
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,12 @@ class WeChatWebhookDriver(BaseWebhookDriver):
             )
             response.raise_for_status()
             data = response.json()
+            is_error, err_msg = _extract_business_error(data)
+            if is_error:
+                logger.warning(
+                    f"WeChatWebhookDriver: business error msg={err_msg}"
+                )
+                return {"success": False, "response": data, "error": err_msg}
             logger.info(f"WeChatWebhookDriver: sent successfully")
             return {"success": True, "response": data, "error": None}
         except requests.exceptions.RequestException as e:

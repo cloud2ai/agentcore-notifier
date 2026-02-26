@@ -6,7 +6,8 @@ smtplib and records NotificationRecord with channel=email.
 import logging
 import smtplib
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import UUID
 
 from django.utils import timezone
 
@@ -26,15 +27,56 @@ logger = logging.getLogger(__name__)
 
 def get_default_email_channel():
     """
-    Get the email channel used for sending: among active channels, the one
-    with smallest ordering (then earliest created_at).
+    Get the email channel used for sending: first active channel by created_at.
     Returns (channel, config) or (None, None).
     """
     qs = NotificationChannel.objects.filter(
         channel_type=NotificationChannel.TYPE_EMAIL,
         is_active=True,
-    ).order_by("ordering", "created_at")
+    ).order_by("created_at")
     channel = qs.first()
+    if not channel or not channel.config:
+        return None, None
+    cfg = channel.config
+    host = (cfg.get("smtp_host") or "").strip()
+    if not host:
+        return None, None
+    config = {
+        "smtp_host": host,
+        "smtp_port": int(cfg.get("smtp_port") or 587),
+        "use_tls": cfg.get("use_tls", True),
+        "smtp_user": (cfg.get("smtp_user") or "").strip() or None,
+        "smtp_password": (cfg.get("smtp_password") or "").strip() or None,
+        "from_email": (cfg.get("from_email") or "").strip(),
+        "from_name": (cfg.get("from_name") or "").strip() or None,
+        "subject_prefix": (cfg.get("subject_prefix") or "").strip() or None,
+    }
+    return channel, config
+
+
+def get_email_channel_by_uuid(
+    channel_uuid: Union[str, UUID],
+) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+    """
+    Get email channel by UUID for application-layer channel selection.
+    Returns (channel, config) or (None, None) if not found or inactive.
+    """
+    try:
+        uuid_val = (
+            UUID(str(channel_uuid))
+            if isinstance(channel_uuid, str)
+            else channel_uuid
+        )
+    except (ValueError, TypeError):
+        return None, None
+    channel = (
+        NotificationChannel.objects.filter(
+            uuid=uuid_val,
+            channel_type=NotificationChannel.TYPE_EMAIL,
+            is_active=True,
+        )
+        .first()
+    )
     if not channel or not channel.config:
         return None, None
     cfg = channel.config
@@ -146,13 +188,19 @@ class EmailService:
         source_id: Optional[str] = None,
         user: Optional[Any] = None,
         channel_id: Optional[int] = None,
+        channel_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Send email notification. Uses default email channel config.
+        Send email notification. When channel_config (and channel_id) are
+        provided, use them; otherwise use default email channel.
         to: list of recipient email addresses.
         """
-        channel, config = self.get_email_channel_and_config()
-        if not channel or not config:
+        if channel_config is not None:
+            config = channel_config
+            channel = None
+        else:
+            channel, config = self.get_email_channel_and_config()
+        if not config:
             result = {
                 "success": False,
                 "response": None,
@@ -170,7 +218,7 @@ class EmailService:
                     channel_id=channel_id,
                 )
             return result
-        if channel_id is None:
+        if channel_id is None and channel is not None:
             channel_id = channel.id
         to_addrs = [a.strip() for a in to if (a or "").strip()]
         if not to_addrs:

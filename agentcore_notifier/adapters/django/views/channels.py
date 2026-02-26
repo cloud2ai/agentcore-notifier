@@ -228,7 +228,6 @@ def _channel_to_dict(ch: NotificationChannel) -> dict:
         "name": str(ch.name or ""),
         "is_active": bool(ch.is_active),
         "is_default": bool(ch.is_default),
-        "ordering": int(ch.ordering),
         "config": config,
         "scope": scope,
         "user_id": user_id,
@@ -247,7 +246,10 @@ class NotificationChannelListView(APIView):
 
     def get(self, request: Request):
         try:
-            qs = NotificationChannel.objects.select_related("user").all()
+            qs = (
+                NotificationChannel.objects.select_related("user")
+                .order_by("created_at")
+            )
             channel_type = request.query_params.get("channel_type")
             if channel_type:
                 qs = qs.filter(channel_type=channel_type)
@@ -274,11 +276,6 @@ class NotificationChannelListView(APIView):
         name = (data.get("name") or "").strip()
         is_active = data.get("is_active", True)
         is_default = bool(data.get("is_default", False))
-        ordering = (
-            int(data.get("ordering", 0))
-            if data.get("ordering") is not None
-            else 0
-        )
         config = data.get("config")
         if config is None:
             config = {}
@@ -303,7 +300,6 @@ class NotificationChannelListView(APIView):
             name=name,
             is_active=is_active,
             is_default=is_default,
-            ordering=ordering,
             config=config,
             user=user,
         )
@@ -351,10 +347,6 @@ class NotificationChannelDetailView(APIView):
                     channel_type=ch.channel_type
                 ).update(is_default=False)
             ch.is_default = is_default
-        if "ordering" in data:
-            ch.ordering = (
-                int(data["ordering"]) if data["ordering"] is not None else 0
-            )
         if "user_id" in data:
             user_id = data.get("user_id")
             if user_id is None:
@@ -369,7 +361,20 @@ class NotificationChannelDetailView(APIView):
         if "config" in data:
             cfg = data["config"]
             if isinstance(cfg, dict):
-                ch.config = cfg
+                # Preserve existing smtp_password when client sends empty (edit
+                # without re-entering password).
+                if (
+                    ch.channel_type == NotificationChannel.TYPE_EMAIL
+                    and (cfg.get("smtp_password") or "").strip() == ""
+                    and isinstance(ch.config, dict)
+                    and (ch.config.get("smtp_password") or "").strip()
+                ):
+                    merged = dict(ch.config)
+                    merged.update(cfg)
+                    merged["smtp_password"] = ch.config.get("smtp_password") or ""
+                    ch.config = merged
+                else:
+                    ch.config = cfg
             else:
                 return Response(
                     {"detail": "config must be an object"},

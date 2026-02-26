@@ -47,6 +47,25 @@ def _parse_end_date(value: Optional[str]) -> Optional[datetime]:
     return dt
 
 
+def _safe_int(
+    value: Any,
+    *,
+    default: Optional[int] = None,
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None,
+) -> Optional[int]:
+    """Best-effort int parsing with optional bounds."""
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return default
+    if min_value is not None and out < min_value:
+        out = min_value
+    if max_value is not None and out > max_value:
+        out = max_value
+    return out
+
+
 def get_notification_stats_from_query(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -56,7 +75,7 @@ def get_notification_stats_from_query(
     """
     start_date = _parse_date(params.get("start_date"))
     end_date = _parse_end_date(params.get("end_date"))
-    user_id = params.get("user_id")
+    user_id = _safe_int(params.get("user_id"), default=None)
     granularity = (params.get("granularity") or "").strip().lower()
 
     qs = NotificationRecord.objects.all()
@@ -292,10 +311,14 @@ def get_notification_record_list_from_query(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Paginated list of NotificationRecord with filters."""
-    page = max(1, int(params.get("page") or 1))
-    page_size = min(100, max(1, int(params.get("page_size") or 20)))
+    page = _safe_int(params.get("page"), default=1, min_value=1) or 1
+    page_size = (
+        _safe_int(params.get("page_size"), default=20, min_value=1, max_value=100)
+        or 20
+    )
     start_date = _parse_date(params.get("start_date"))
     end_date = _parse_end_date(params.get("end_date"))
+    user_id = _safe_int(params.get("user_id"), default=None)
 
     qs = (
         NotificationRecord.objects.all()
@@ -308,8 +331,8 @@ def get_notification_record_list_from_query(
         qs = qs.filter(source_type=params["source_type"])
     if params.get("status"):
         qs = qs.filter(status=params["status"])
-    if params.get("user_id") is not None:
-        qs = qs.filter(user_id=params["user_id"])
+    if user_id is not None:
+        qs = qs.filter(user_id=user_id)
     if start_date:
         qs = qs.filter(created_at__gte=start_date)
     if end_date:

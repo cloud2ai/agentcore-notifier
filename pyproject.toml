@@ -28,7 +28,9 @@ where = ["."]
 include = ["agentcore_notifier*"]
 
 [tool.pytest.ini_options]
-django_settings = "tests.settings"
+DJANGO_SETTINGS_MODULE = "tests.settings"
+django_find_project = false
+pythonpath = ["."]
 python_files = ["test_*.py"]
 testpaths = ["tests"]
 addopts = "-v"

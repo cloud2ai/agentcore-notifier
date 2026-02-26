@@ -75,3 +75,43 @@ class TestFeishuDriverSend:
         assert call_json["sign"] == expected_sign
         assert call_json["msg_type"] == "text"
         assert call_json["text"]["text"] == "hi"
+
+    def test_send_fails_when_status_code_non_zero(self):
+        driver = FeishuWebhookDriver()
+        config = {
+            "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+        }
+        payload = {"msg_type": "text", "text": {"text": "hi"}}
+        with patch(
+            "agentcore_notifier.adapters.django.services.webhook.feishu."
+            "requests.post"
+        ) as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "StatusCode": 19001,
+                "msg": "invalid token",
+            }
+            mock_post.return_value.raise_for_status = lambda: None
+            result = driver.send(payload, config)
+        assert result["success"] is False
+        assert "invalid token" in (result["error"] or "")
+
+    def test_send_fails_when_errcode_non_zero(self):
+        driver = FeishuWebhookDriver()
+        config = {
+            "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+        }
+        payload = {"msg_type": "text", "text": {"text": "hi"}}
+        with patch(
+            "agentcore_notifier.adapters.django.services.webhook.feishu."
+            "requests.post"
+        ) as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "errcode": 40013,
+                "errmsg": "invalid appid",
+            }
+            mock_post.return_value.raise_for_status = lambda: None
+            result = driver.send(payload, config)
+        assert result["success"] is False
+        assert "invalid appid" in (result["error"] or "")

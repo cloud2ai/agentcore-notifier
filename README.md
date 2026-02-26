@@ -55,9 +55,15 @@ Configure via:
 `adapters.django.services.webhook_service` and `email_service`) both return
 `(channel, config_dict)` or `(None, None)`.
 
+- **Webhook default**: first **active** webhook channel, ordered by **created_at** (earliest first). Name and `ordering` do not affect which channel is default.
 - **channel**: the active `NotificationChannel` instance (or None).
 - **config_dict**: a dict built from `channel.config` (url/headers for webhook;
   smtp_host/from_email etc. for email), or None.
+
+When the application layer wants to **select a specific channel** (e.g. from its own config), pass **channel by UUID** so that channel name changes do not break references:
+
+- `get_webhook_channel_by_uuid(channel_uuid)` in `webhook_service` returns `(channel, config)` or `(None, None)`.
+- When calling `send_webhook_notification.delay(..., channel_config={"channel_uuid": "<uuid>"})`, the task resolves the channel by UUID and uses that channel's config.
 
 When unpacking, use consistent names so call sites stay clear and do not
 shadow gettext `_` in modules that use translation:

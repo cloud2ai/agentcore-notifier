@@ -86,6 +86,13 @@ class TestGetNotificationStatsFromQuery:
         out_all = notification_stats.get_notification_stats_from_query({})
         assert out_all["summary"]["total"] == 3
 
+    def test_invalid_user_id_is_ignored(self):
+        out = notification_stats.get_notification_stats_from_query(
+            {"user_id": "not-an-int"}
+        )
+        assert "summary" in out
+        assert "total" in out["summary"]
+
     def test_filter_by_start_date_and_end_date(self):
         channel = NotificationChannel.objects.create(
             name="w",
@@ -159,6 +166,13 @@ class TestGetNotificationRecordListFromQuery:
         assert out["page"] == 1
         assert out["page_size"] >= 1
         assert out["results"] == []
+
+    def test_invalid_pagination_params_fallback_to_defaults(self):
+        out = notification_stats.get_notification_record_list_from_query(
+            {"page": "oops", "page_size": "oops"}
+        )
+        assert out["page"] == 1
+        assert out["page_size"] == 20
 
     def test_paginated_list_with_filters(self):
         channel = NotificationChannel.objects.create(

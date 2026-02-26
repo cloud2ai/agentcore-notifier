@@ -4,7 +4,8 @@ Reads config from NotificationChannel (webhook type); dispatches by
 provider_type via WebhookDriverRegistry.
 """
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, Union
+from uuid import UUID
 
 from django.utils import timezone
 
@@ -25,26 +26,27 @@ from agentcore_notifier.constants import (
 logger = logging.getLogger(__name__)
 
 
-def get_default_webhook_channel():
+def build_webhook_config_from_dict(
+    cfg: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
     """
-    Get webhook channel for sending: active channels, smallest ordering then
-    earliest created_at. No "default" flag; ordering determines which.
-    Returns (channel, config) or (None, None).
+    Build internal webhook config dict from a raw config dict (e.g. from
+    application layer or NotificationChannel.config). Callers can pass
+    channel config at call time for maximum flexibility.
+    Returns None if url is missing or empty.
     """
-    qs = NotificationChannel.objects.filter(
-        channel_type=NotificationChannel.TYPE_WEBHOOK,
-        is_active=True,
-    ).order_by("ordering", "created_at")
-    channel = qs.first()
-    if not channel or not channel.config:
-        return None, None
-    cfg = channel.config
+    if not cfg:
+        return None
     url = (cfg.get("url") or "").strip()
     if not url:
-        return None, None
-    config = {
+        return None
+    return {
         "is_active": True,
-        "provider": cfg.get("provider_type") or DEFAULT_PROVIDER_TYPE,
+        "provider": (
+            cfg.get("provider_type")
+            or cfg.get("provider")
+            or DEFAULT_PROVIDER_TYPE
+        ),
         "url": url,
         "headers": cfg.get("headers") or {},
         "message_prefix": (
@@ -53,6 +55,59 @@ def get_default_webhook_channel():
         "sign_secret": (cfg.get("sign_secret") or "").strip() or None,
         "timeout": cfg.get("timeout"),
     }
+
+
+def get_default_webhook_channel():
+    """
+    Get webhook channel for sending: first active channel ordered by
+    created_at (earliest first). Name/ordering changes do not affect default.
+    Returns (channel, config) or (None, None).
+    """
+    qs = (
+        NotificationChannel.objects.filter(
+            channel_type=NotificationChannel.TYPE_WEBHOOK,
+            is_active=True,
+        )
+        .order_by("created_at")
+    )
+    channel = qs.first()
+    if not channel or not channel.config:
+        return None, None
+    config = build_webhook_config_from_dict(channel.config)
+    if not config:
+        return None, None
+    return channel, config
+
+
+def get_webhook_channel_by_uuid(
+    channel_uuid: Union[str, UUID],
+) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+    """
+    Get webhook channel by UUID for application-layer channel selection.
+    Use UUID so that channel name changes do not break references.
+    Returns (channel, config) or (None, None) if not found or inactive.
+    """
+    try:
+        uuid_val = (
+            UUID(str(channel_uuid))
+            if isinstance(channel_uuid, str)
+            else channel_uuid
+        )
+    except (ValueError, TypeError):
+        return None, None
+    channel = (
+        NotificationChannel.objects.filter(
+            uuid=uuid_val,
+            channel_type=NotificationChannel.TYPE_WEBHOOK,
+            is_active=True,
+        )
+        .first()
+    )
+    if not channel or not channel.config:
+        return None, None
+    config = build_webhook_config_from_dict(channel.config)
+    if not config:
+        return None, None
     return channel, config
 
 
@@ -83,7 +138,11 @@ class WebhookService:
         channel, config = get_default_webhook_channel()
         return channel, config
 
-    def _get_config(self) -> Optional[Dict[str, Any]]:
+    def _get_config(
+        self, channel_config: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        if channel_config is not None:
+            return channel_config
         config = self.get_webhook_config()
         if not config:
             logger.warning(
@@ -102,9 +161,10 @@ class WebhookService:
         source_id: Optional[str] = None,
         user: Optional[Any] = None,
         channel_id: Optional[int] = None,
+        channel_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[NotificationRecord]:
         """Record notification send result."""
-        config = self._get_config()
+        config = self._get_config(channel_config=channel_config)
         status = Status.SUCCESS if result.get("success") else Status.FAILED
         metadata = {}
         if config:
@@ -144,9 +204,14 @@ class WebhookService:
         source_id: Optional[str] = None,
         user: Optional[Any] = None,
         channel_id: Optional[int] = None,
+        channel_config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Send notification by provider type via driver registry."""
-        config = self._get_config()
+        """
+        Send notification by provider type via driver registry.
+        When channel_config is provided (e.g. from application layer), use it
+        instead of default webhook channel; otherwise use NotificationChannel.
+        """
+        config = self._get_config(channel_config=channel_config)
         if not config:
             result = {
                 "success": False,
@@ -163,6 +228,7 @@ class WebhookService:
                     source_id,
                     user,
                     channel_id=channel_id,
+                    channel_config=channel_config,
                 )
             return result
 
@@ -181,6 +247,7 @@ class WebhookService:
                 source_id,
                 user,
                 channel_id=channel_id,
+                channel_config=channel_config,
             )
             if record:
                 result["record_uuid"] = str(record.uuid)
