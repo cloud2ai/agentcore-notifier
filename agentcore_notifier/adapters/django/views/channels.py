@@ -108,6 +108,7 @@ def _validate_email_config(
     if not host:
         return {"success": False, "error": _("SMTP host not configured")}
     port = int(config.get("smtp_port") or 587)
+    use_ssl = bool(config.get("use_ssl", False))
     use_tls = config.get("use_tls", True)
     to_send = (test_recipient or "").strip()
     if to_send:
@@ -122,9 +123,12 @@ def _validate_email_config(
         "to": to_send if to_send else _("(connection only)"),
     }
     try:
-        smtp_class = smtplib.SMTP
+        if use_ssl:
+            smtp_class = smtplib.SMTP_SSL
+        else:
+            smtp_class = smtplib.SMTP
         with smtp_class(host, port, timeout=10) as smtp:
-            if use_tls:
+            if (not use_ssl) and use_tls:
                 smtp.starttls()
             user = (config.get("smtp_user") or "").strip()
             password = (config.get("smtp_password") or "").strip()
@@ -207,6 +211,25 @@ def _validate_email_config(
         return {"success": False, "error": err_msg}
 
 
+def _config_for_api(config: dict, channel_type: str) -> dict:
+    """
+    Return a copy of config with sensitive fields removed so they are never
+    sent to the client (list/retrieve/update response). Editing without
+    re-entering password is handled in PUT by preserving existing value.
+    """
+    try:
+        out = json.loads(json.dumps(config))
+    except (TypeError, ValueError):
+        out = {}
+    if not isinstance(out, dict):
+        return {}
+    if channel_type == NotificationChannel.TYPE_EMAIL:
+        out.pop("smtp_password", None)
+    elif channel_type == NotificationChannel.TYPE_WEBHOOK:
+        out.pop("sign_secret", None)
+    return out
+
+
 def _channel_to_dict(ch: NotificationChannel) -> dict:
     scope = "global"
     user_id = None
@@ -215,11 +238,8 @@ def _channel_to_dict(ch: NotificationChannel) -> dict:
         scope = "user"
         user_id = ch.user_id
         user_display = getattr(ch.user, "username", None) or str(ch.user_id)
-    config = ch.config if isinstance(ch.config, dict) else {}
-    try:
-        config = json.loads(json.dumps(config))
-    except (TypeError, ValueError):
-        config = {}
+    raw_config = ch.config if isinstance(ch.config, dict) else {}
+    config = _config_for_api(raw_config, str(ch.channel_type))
     created_at = ch.created_at
     updated_at = ch.updated_at
     return {
@@ -313,9 +333,9 @@ class NotificationChannelDetailView(APIView):
 
     def _get_channel(self, uuid) -> Optional[NotificationChannel]:
         try:
-            return (
-            NotificationChannel.objects.select_related("user").get(uuid=uuid)
-        )
+            return NotificationChannel.objects.select_related("user").get(
+                uuid=uuid
+            )
         except (NotificationChannel.DoesNotExist, ValueError):
             return None
 
@@ -361,17 +381,30 @@ class NotificationChannelDetailView(APIView):
         if "config" in data:
             cfg = data["config"]
             if isinstance(cfg, dict):
-                # Preserve existing smtp_password when client sends empty (edit
-                # without re-entering password).
-                if (
-                    ch.channel_type == NotificationChannel.TYPE_EMAIL
-                    and (cfg.get("smtp_password") or "").strip() == ""
+                # Preserve existing secrets when client sends empty (edit
+                # without re-entering password/sign_secret).
+                merged = None
+                if ch.channel_type == NotificationChannel.TYPE_EMAIL and (
+                    (cfg.get("smtp_password") or "").strip() == ""
                     and isinstance(ch.config, dict)
                     and (ch.config.get("smtp_password") or "").strip()
                 ):
                     merged = dict(ch.config)
                     merged.update(cfg)
-                    merged["smtp_password"] = ch.config.get("smtp_password") or ""
+                    merged["smtp_password"] = (
+                        ch.config.get("smtp_password") or ""
+                    )
+                elif ch.channel_type == NotificationChannel.TYPE_WEBHOOK and (
+                    (cfg.get("sign_secret") or "").strip() == ""
+                    and isinstance(ch.config, dict)
+                    and (ch.config.get("sign_secret") or "").strip()
+                ):
+                    merged = dict(ch.config)
+                    merged.update(cfg)
+                    merged["sign_secret"] = (
+                        ch.config.get("sign_secret") or ""
+                    )
+                if merged is not None:
                     ch.config = merged
                 else:
                     ch.config = cfg
@@ -422,6 +455,34 @@ class ChannelValidateView(APIView):
                 {"detail": "config must be an object"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        channel_uuid = (data.get("channel_uuid") or "").strip() or None
+        if channel_uuid and channel_type in (
+            NotificationChannel.TYPE_WEBHOOK,
+            NotificationChannel.TYPE_EMAIL,
+        ):
+            try:
+                ch = NotificationChannel.objects.get(uuid=channel_uuid)
+                if (
+                    ch.channel_type == channel_type
+                    and isinstance(ch.config, dict)
+                ):
+                    merged = dict(ch.config)
+                    merged.update(config)
+                    if channel_type == NotificationChannel.TYPE_EMAIL and (
+                        (merged.get("smtp_password") or "").strip() == ""
+                    ):
+                        merged["smtp_password"] = (
+                            ch.config.get("smtp_password") or ""
+                        )
+                    elif channel_type == NotificationChannel.TYPE_WEBHOOK and (
+                        (merged.get("sign_secret") or "").strip() == ""
+                    ):
+                        merged["sign_secret"] = (
+                            ch.config.get("sign_secret") or ""
+                        )
+                    config = merged
+            except (NotificationChannel.DoesNotExist, ValueError):
+                pass
         if getattr(request.user, "is_authenticated", True):
             user_id = getattr(request.user, "pk", None)
         else:

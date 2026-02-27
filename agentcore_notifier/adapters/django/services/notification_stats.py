@@ -313,7 +313,12 @@ def get_notification_record_list_from_query(
     """Paginated list of NotificationRecord with filters."""
     page = _safe_int(params.get("page"), default=1, min_value=1) or 1
     page_size = (
-        _safe_int(params.get("page_size"), default=20, min_value=1, max_value=100)
+        _safe_int(
+            params.get("page_size"),
+            default=20,
+            min_value=1,
+            max_value=100,
+        )
         or 20
     )
     start_date = _parse_date(params.get("start_date"))

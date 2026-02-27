@@ -44,6 +44,7 @@ def get_default_email_channel():
     config = {
         "smtp_host": host,
         "smtp_port": int(cfg.get("smtp_port") or 587),
+        "use_ssl": bool(cfg.get("use_ssl", False)),
         "use_tls": cfg.get("use_tls", True),
         "smtp_user": (cfg.get("smtp_user") or "").strip() or None,
         "smtp_password": (cfg.get("smtp_password") or "").strip() or None,
@@ -86,6 +87,7 @@ def get_email_channel_by_uuid(
     config = {
         "smtp_host": host,
         "smtp_port": int(cfg.get("smtp_port") or 587),
+        "use_ssl": bool(cfg.get("use_ssl", False)),
         "use_tls": cfg.get("use_tls", True),
         "smtp_user": (cfg.get("smtp_user") or "").strip() or None,
         "smtp_password": (cfg.get("smtp_password") or "").strip() or None,
@@ -129,11 +131,15 @@ class EmailService:
         msg["To"] = ", ".join(to_addrs)
         host = config["smtp_host"]
         port = config["smtp_port"]
+        use_ssl = bool(config.get("use_ssl", False))
         use_tls = config.get("use_tls", True)
         try:
-            smtp_class = smtplib.SMTP
+            if use_ssl:
+                smtp_class = smtplib.SMTP_SSL
+            else:
+                smtp_class = smtplib.SMTP
             with smtp_class(host, port, timeout=30) as smtp:
-                if use_tls:
+                if (not use_ssl) and use_tls:
                     smtp.starttls()
                 user = config.get("smtp_user")
                 password = config.get("smtp_password")

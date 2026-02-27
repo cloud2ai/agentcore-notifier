@@ -304,7 +304,10 @@ def send_email_notification(
 
 NOTIFICATION_TYPE_WEBHOOK = "webhook"
 NOTIFICATION_TYPE_EMAIL = "email"
-SUPPORTED_NOTIFICATION_TYPES = (NOTIFICATION_TYPE_WEBHOOK, NOTIFICATION_TYPE_EMAIL)
+SUPPORTED_NOTIFICATION_TYPES = (
+    NOTIFICATION_TYPE_WEBHOOK,
+    NOTIFICATION_TYPE_EMAIL,
+)
 
 
 def _validate_send_notification_params(
@@ -346,7 +349,9 @@ def _validate_send_notification_params(
             return False, {
                 "success": False,
                 "response": None,
-                "error": "params must contain 'provider_type' (str) for webhook",
+                "error": (
+                    "params must contain 'provider_type' (str) for webhook"
+                ),
             }
         return True, None
     if notification_type == NOTIFICATION_TYPE_EMAIL:
@@ -378,7 +383,9 @@ def _validate_send_notification_params(
             return False, {
                 "success": False,
                 "response": None,
-                "error": "params 'to' must be a non-empty list of email addresses",
+                "error": (
+                    "params 'to' must be a non-empty list of email addresses"
+                ),
             }
         return True, None
     return True, None

@@ -122,3 +122,29 @@ class TestEmailService:
         assert rec.status == Status.SUCCESS
         assert rec.payload.get("subject") == "Test Subject"
         assert "user@example.com" in rec.payload.get("to", [])
+
+    @patch(
+        "agentcore_notifier.adapters.django.services.email_service."
+        "smtplib.SMTP_SSL"
+    )
+    def test_send_uses_smtp_ssl_when_use_ssl_enabled(
+        self, mock_smtp_ssl_class, email_channel_config
+    ):
+        mock_smtp_ssl_class.return_value.__enter__ = lambda self: self
+        mock_smtp_ssl_class.return_value.__exit__ = lambda *a: None
+        mock_smtp_ssl_class.return_value.sendmail = lambda *a, **k: None
+
+        NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_EMAIL,
+            is_active=True,
+            config={**email_channel_config, "smtp_port": 465, "use_ssl": True},
+        )
+        svc = EmailService()
+        result = svc.send(
+            subject="SSL Test",
+            body="Body",
+            to=["user@example.com"],
+            source_app="test_app",
+        )
+        assert result["success"] is True
+        assert mock_smtp_ssl_class.called
