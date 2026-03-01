@@ -6,7 +6,7 @@ do not mix. Merge/silence windows are applied per
 (user, source_app, source_type, source_id).
 See docs/MERGE_SILENCE_DESIGN.md for full principles.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as utc_tz
 from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
@@ -16,6 +16,7 @@ from agentcore_notifier.constants import Status
 
 
 def _parse_silence_until(until: Any) -> Optional[datetime]:
+    """Parse silence_until to timezone-aware datetime; return None on error."""
     if until is None:
         return None
     try:
@@ -24,9 +25,9 @@ def _parse_silence_until(until: Any) -> Optional[datetime]:
         else:
             until_dt = until
         if until_dt.tzinfo is None:
-            until_dt = timezone.make_aware(until_dt)
+            until_dt = timezone.make_aware(until_dt, utc_tz.utc)
         return until_dt
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return None
 
 

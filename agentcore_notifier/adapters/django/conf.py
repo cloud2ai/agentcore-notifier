@@ -83,7 +83,7 @@ def _crontab_from_expression(expr):
             month_of_year=parts[3],
             day_of_week=parts[4],
         )
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 

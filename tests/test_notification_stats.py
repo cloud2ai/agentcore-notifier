@@ -122,7 +122,11 @@ class TestGetNotificationStatsFromQuery:
 
     def test_series_day_returns_24_buckets(self):
         out = notification_stats.get_notification_stats_from_query(
-            {"granularity": "day", "start_date": "2025-02-01", "end_date": "2025-02-01"}
+            {
+                "granularity": "day",
+                "start_date": "2025-02-01",
+                "end_date": "2025-02-01",
+            }
         )
         assert "series" in out
         assert len(out["series"]) == 24

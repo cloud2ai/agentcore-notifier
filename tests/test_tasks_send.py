@@ -1,4 +1,4 @@
-"""Tests for send_webhook_notification, send_email_notification, and send_notification tasks."""
+"""Tests for send_webhook, send_email, send_notification tasks."""
 import pytest
 from unittest.mock import patch
 
@@ -310,9 +310,12 @@ class TestSendNotificationUnified:
             params={},
         )
         assert result.get("success") is False
-        assert "Unsupported notification_type" in result["error"] or "sms" in result["error"]
+        err = result["error"]
+        assert "Unsupported notification_type" in err or "sms" in err
 
-    def test_send_notification_webhook_invalid_params_returns_validation_error(self):
+    def test_send_notification_webhook_invalid_params_returns_validation_error(
+        self,
+    ):
         result = send_notification(
             notification_type=NOTIFICATION_TYPE_WEBHOOK,
             source_app="test_app",
@@ -321,7 +324,9 @@ class TestSendNotificationUnified:
         assert result.get("success") is False
         assert "payload" in result["error"].lower()
 
-    def test_send_notification_email_invalid_params_returns_validation_error(self):
+    def test_send_notification_email_invalid_params_returns_validation_error(
+        self,
+    ):
         result = send_notification(
             notification_type=NOTIFICATION_TYPE_EMAIL,
             source_app="test_app",
@@ -331,10 +336,17 @@ class TestSendNotificationUnified:
         assert "to" in result["error"].lower()
 
     @patch(
-        "agentcore_notifier.adapters.django.tasks.send.send_webhook_notification"
+        "agentcore_notifier.adapters.django.tasks.send."
+        "send_webhook_notification"
     )
-    def test_send_notification_dispatches_webhook_with_params(self, mock_webhook):
-        mock_webhook.return_value = {"success": True, "response": None, "error": None}
+    def test_send_notification_dispatches_webhook_with_params(
+        self, mock_webhook
+    ):
+        mock_webhook.return_value = {
+            "success": True,
+            "response": None,
+            "error": None,
+        }
         payload = {"msg_type": "text", "content": {"text": "hi"}}
         result = send_notification(
             notification_type=NOTIFICATION_TYPE_WEBHOOK,
@@ -359,8 +371,14 @@ class TestSendNotificationUnified:
     @patch(
         "agentcore_notifier.adapters.django.tasks.send.send_email_notification"
     )
-    def test_send_notification_dispatches_email_with_params(self, mock_email):
-        mock_email.return_value = {"success": True, "response": None, "error": None}
+    def test_send_notification_dispatches_email_with_params(
+        self, mock_email
+    ):
+        mock_email.return_value = {
+            "success": True,
+            "response": None,
+            "error": None,
+        }
         result = send_notification(
             notification_type=NOTIFICATION_TYPE_EMAIL,
             source_app="cloud_billing",

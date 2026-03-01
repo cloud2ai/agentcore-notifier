@@ -80,7 +80,9 @@ class TestBuildWebhookConfigFromDict:
         assert build_webhook_config_from_dict(None) is None
 
     def test_returns_none_when_url_missing(self):
-        assert build_webhook_config_from_dict({"provider_type": "feishu"}) is None
+        assert build_webhook_config_from_dict(
+            {"provider_type": "feishu"}
+        ) is None
         assert build_webhook_config_from_dict({"url": ""}) is None
         assert build_webhook_config_from_dict({"url": "   "}) is None
 
@@ -123,7 +125,10 @@ class TestGetDefaultWebhookChannel:
         second = NotificationChannel.objects.create(
             channel_type=NotificationChannel.TYPE_WEBHOOK,
             is_active=True,
-            config={**webhook_channel_config, "url": "https://second.example.com"},
+            config={
+                **webhook_channel_config,
+                "url": "https://second.example.com",
+            },
         )
         channel, config = get_default_webhook_channel()
         assert channel is not None
@@ -145,7 +150,7 @@ class TestGetDefaultWebhookChannel:
 
 @pytest.mark.django_db
 class TestGetWebhookChannelByUuid:
-    """Test get_webhook_channel_by_uuid (application-layer channel selection)."""
+    """Test get_webhook_channel_by_uuid (app-layer channel selection)."""
 
     def test_returns_none_for_invalid_uuid(self):
         channel, config = get_webhook_channel_by_uuid("not-a-uuid")
@@ -161,7 +166,9 @@ class TestGetWebhookChannelByUuid:
         assert channel is None
         assert config is None
 
-    def test_returns_channel_when_found_by_str_uuid(self, webhook_channel_config):
+    def test_returns_channel_when_found_by_str_uuid(
+        self, webhook_channel_config
+    ):
         ch = NotificationChannel.objects.create(
             channel_type=NotificationChannel.TYPE_WEBHOOK,
             is_active=True,
@@ -173,7 +180,9 @@ class TestGetWebhookChannelByUuid:
         assert config is not None
         assert config["url"] == webhook_channel_config["url"]
 
-    def test_returns_channel_when_found_by_uuid_type(self, webhook_channel_config):
+    def test_returns_channel_when_found_by_uuid_type(
+        self, webhook_channel_config
+    ):
         ch = NotificationChannel.objects.create(
             channel_type=NotificationChannel.TYPE_WEBHOOK,
             is_active=True,

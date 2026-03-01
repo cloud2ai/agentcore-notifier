@@ -110,7 +110,7 @@ class TestEmailService:
     def test_send_success_and_record(
         self, mock_smtp_class, email_channel_config
     ):
-        """Send succeeds and creates a NotificationRecord with expected data."""
+        """Send succeeds and creates NotificationRecord with expected data."""
         _make_mock_smtp(mock_smtp_class, use_starttls=True)
 
         NotificationChannel.objects.create(

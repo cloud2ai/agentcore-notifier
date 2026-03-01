@@ -3,7 +3,7 @@ Notification statistics for admin API.
 Series: by day = 24 hours (0-23), by month = 30 days, by year = 12 months;
 all buckets always present, fill 0 when no data.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as utc_tz
 from typing import Any, Dict, List, Optional
 
 from django.contrib.auth import get_user_model
@@ -23,15 +23,21 @@ def _parse_date(value: Optional[str]) -> Optional[datetime]:
     if "T" not in s and " " not in s and len(s) <= 10:
         d = parse_date(s)
         if d:
-            dt = timezone.make_aware(datetime.combine(d, datetime.min.time()))
+            dt = timezone.make_aware(
+                datetime.combine(d, datetime.min.time()), utc_tz.utc
+            )
             return dt
         return None
     try:
         dt = parse_datetime(s)
         if dt:
-            return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+            return (
+                timezone.make_aware(dt, utc_tz.utc)
+                if timezone.is_naive(dt)
+                else dt.astimezone(utc_tz.utc)
+            )
         return timezone.make_aware(
-            datetime.fromisoformat(s.replace("Z", "+00:00"))
+            datetime.fromisoformat(s.replace("Z", "+00:00")), utc_tz.utc
         )
     except (ValueError, TypeError):
         return None
@@ -171,7 +177,6 @@ def _build_series_fixed_buckets(
     month -> one bucket per day in the selected month;
     year -> 12 months in the selected year.
     """
-    tz = timezone.get_current_timezone()
     if not start_date and end_date:
         start_date = end_date
     if not end_date and start_date:
@@ -186,7 +191,7 @@ def _build_series_fixed_buckets(
             hour=0, minute=0, second=0, microsecond=0
         )
         if timezone.is_naive(day_start):
-            day_start = timezone.make_aware(day_start, tz)
+            day_start = timezone.make_aware(day_start, utc_tz.utc)
         day_end = day_start + timedelta(days=1)
         day_qs = qs.filter(
             created_at__gte=day_start,
