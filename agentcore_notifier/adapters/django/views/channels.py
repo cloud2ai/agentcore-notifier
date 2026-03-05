@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils import translation
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
@@ -54,9 +55,17 @@ def _validate_webhook_config(
         "sign_secret": (config.get("sign_secret") or "").strip() or None,
         "timeout": config.get("timeout"),
     }
+    language = (config.get("language") or "zh-hans").strip().lower()
+    if language not in ("zh-hans", "en"):
+        language = "zh-hans"
+    # Use gettext so message respects project locale; ensure .mo files exist
+    # (run: django-admin compilemessages -l zh_Hans -l en under LOCALE_PATHS)
+    lang_code = "zh_Hans" if language == "zh-hans" else "en"
+    with translation.override(lang_code):
+        test_message = _("[DevMind] Channel validation test")
     test_payload = {
         "msg_type": "text",
-        "content": {"text": _("[DevMind] Channel validation test")},
+        "content": {"text": test_message},
     }
     registry = get_default_registry()
     result = registry.send(provider_type, test_payload, cfg)
