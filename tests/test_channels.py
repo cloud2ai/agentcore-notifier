@@ -145,6 +145,38 @@ class TestChannelValidateView:
         assert response.status_code == 200
         assert response.json() == {"success": True}
 
+    @patch(
+        "agentcore_notifier.adapters.django.services.webhook.feishu."
+        "requests.post"
+    )
+    def test_validate_wecom_uses_msgtype_payload(self, mock_post, api_client):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"errcode": 0}
+        mock_post.return_value.raise_for_status = lambda: None
+        webhook_url = (
+            "https://qyapi.weixin.qq.com/"
+            "cgi-bin/webhook/send?key=xxx"
+        )
+        response = api_client.post(
+            "/channels/validate/",
+            data={
+                "channel_type": "webhook",
+                "config": {
+                    "url": webhook_url,
+                    "provider_type": "wecom",
+                },
+            },
+            format="json",
+        )
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+        call_kwargs = mock_post.call_args[1]
+        expected_content = "[Agentcore Notifier] Channel validation test"
+        assert call_kwargs["json"] == {
+            "msgtype": "text",
+            "text": {"content": expected_content},
+        }
+
     def test_validate_webhook_missing_url_returns_400(self, api_client):
         response = api_client.post(
             "/channels/validate/",

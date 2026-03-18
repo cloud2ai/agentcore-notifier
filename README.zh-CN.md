@@ -8,6 +8,7 @@
 - 发送仅通过 **Celery 任务**完成，无 HTTP 发送接口。
 - 支持静默与合并规则，详见 [docs/MERGE_SILENCE_DESIGN.md](docs/MERGE_SILENCE_DESIGN.md)。
 - 飞书自定义机器人： [docs/FEISHU_WEBHOOK.md](docs/FEISHU_WEBHOOK.md)。
+- 企业微信 webhook 的 `provider_type` 推荐使用 `wecom`；`wechat` 仅保留为兼容别名，避免历史配置失效。
 
 ---
 
@@ -27,7 +28,7 @@ pip install -e git+https://github.com/cloud2ai/agentcore-notifier.git
 pip install -e path/to/agentcore-notifier
 ```
 
-- 在主项目的 `INSTALLED_APPS` 中加入（如 DevMind）：
+- 在主项目的 `INSTALLED_APPS` 中加入（如 Agentcore Notifier）：
 
 ```python
 'agentcore_notifier.adapters.django',

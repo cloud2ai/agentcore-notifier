@@ -40,5 +40,5 @@ def email_channel_config():
         "smtp_port": 587,
         "use_tls": True,
         "from_email": "noreply@example.com",
-        "from_name": "DevMind",
+        "from_name": "Agentcore Notifier",
     }

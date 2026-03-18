@@ -17,6 +17,9 @@ class Provider:
     """Notification provider type constants."""
 
     FEISHU = "feishu"
+    # WeCom is the preferred canonical provider type for WeCom webhook.
+    # WECHAT is kept as a legacy compatibility alias because older configs
+    # and integrations may still persist that value.
     WECOM = "wecom"
     WECHAT = "wechat"
     EMAIL = "email"
@@ -41,6 +44,6 @@ FEISHU_PROVIDERS = [Provider.FEISHU, Provider.WECOM]
 PROVIDER_DISPLAY_NAMES = {
     Provider.FEISHU: "飞书",
     Provider.WECOM: "WeCom",
-    Provider.WECHAT: "企业微信",
+    Provider.WECHAT: "WeChat Work",
     Provider.EMAIL: "Email",
 }

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 SOURCE_APP_VALIDATE = "agentcore_notifier"
 SOURCE_TYPE_VALIDATE = "channel_validate"
+VALIDATION_BRAND = "Agentcore Notifier"
 
 
 def _validate_webhook_config(
@@ -54,10 +55,17 @@ def _validate_webhook_config(
         "sign_secret": (config.get("sign_secret") or "").strip() or None,
         "timeout": config.get("timeout"),
     }
-    test_payload = {
-        "msg_type": "text",
-        "content": {"text": _("[DevMind] Channel validation test")},
-    }
+    test_message = _("[%s] Channel validation test") % VALIDATION_BRAND
+    if provider_type in ("wechat", "wecom"):
+        test_payload = {
+            "msgtype": "text",
+            "text": {"content": test_message},
+        }
+    else:
+        test_payload = {
+            "msg_type": "text",
+            "content": {"text": test_message},
+        }
     registry = get_default_registry()
     result = registry.send(provider_type, test_payload, cfg)
     record_status = Status.SUCCESS if result.get("success") else Status.FAILED
@@ -119,7 +127,7 @@ def _validate_email_config(
                 "error": _("From address required to send test"),
             }
     payload_record = {
-        "subject": _("[DevMind] Email validation test"),
+        "subject": _("[%s] Email validation test") % VALIDATION_BRAND,
         "to": to_send if to_send else _("(connection only)"),
     }
     try:
@@ -136,9 +144,13 @@ def _validate_email_config(
                 smtp.login(user, password)
             if to_send:
                 from_addr = (config.get("from_email") or "").strip()
-                body_text = _("[DevMind] Email channel validation test")
+                body_text = _("[%s] Email channel validation test") % (
+                    VALIDATION_BRAND
+                )
                 msg = MIMEText(body_text, "plain", "utf-8")
-                msg["Subject"] = _("[DevMind] Email validation test")
+                msg["Subject"] = _("[%s] Email validation test") % (
+                    VALIDATION_BRAND
+                )
                 msg["From"] = from_addr
                 msg["To"] = to_send
                 smtp.sendmail(from_addr, [to_send], msg.as_string())

@@ -27,7 +27,7 @@ Or, when the host project uses it as a submodule, from repo root:
 pip install -e path/to/agentcore-notifier
 ```
 
-- Add to `INSTALLED_APPS` in the main project (e.g. DevMind):
+- Add to `INSTALLED_APPS` in the main project (e.g. Agentcore Notifier):
 
 ```python
 'agentcore_notifier.adapters.django',
