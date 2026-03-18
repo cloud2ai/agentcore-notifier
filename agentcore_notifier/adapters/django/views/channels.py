@@ -25,6 +25,9 @@ from agentcore_notifier.adapters.django.models import (
 from agentcore_notifier.adapters.django.services.webhook import (
     get_default_registry,
 )
+from agentcore_notifier.adapters.django.services.webhook_service import (
+    build_text_payload,
+)
 from agentcore_notifier.constants import Channel, Provider, Status
 
 logger = logging.getLogger(__name__)
@@ -56,16 +59,7 @@ def _validate_webhook_config(
         "timeout": config.get("timeout"),
     }
     test_message = _("[%s] Channel validation test") % VALIDATION_BRAND
-    if provider_type in ("wechat", "wecom"):
-        test_payload = {
-            "msgtype": "text",
-            "text": {"content": test_message},
-        }
-    else:
-        test_payload = {
-            "msg_type": "text",
-            "content": {"text": test_message},
-        }
+    test_payload = build_text_payload(provider_type, test_message)
     registry = get_default_registry()
     result = registry.send(provider_type, test_payload, cfg)
     record_status = Status.SUCCESS if result.get("success") else Status.FAILED
