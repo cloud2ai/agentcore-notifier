@@ -9,6 +9,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, Optional
 
 # NOTE(Ray): get_user_model at top for channel user; no circular deps.
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -34,7 +35,10 @@ logger = logging.getLogger(__name__)
 
 SOURCE_APP_VALIDATE = "agentcore_notifier"
 SOURCE_TYPE_VALIDATE = "channel_validate"
-VALIDATION_BRAND = "Agentcore Notifier"
+
+
+def _get_validation_brand() -> str:
+    return getattr(settings, "AGENTCORE_NOTIFIER_BRAND", "AGENTCORE NOTIFIER")
 
 
 def _validate_webhook_config(
@@ -58,7 +62,7 @@ def _validate_webhook_config(
         "sign_secret": (config.get("sign_secret") or "").strip() or None,
         "timeout": config.get("timeout"),
     }
-    test_message = _("[%s] Channel validation test") % VALIDATION_BRAND
+    test_message = _("[%s] Channel validation test") % _get_validation_brand()
     test_payload = build_text_payload(provider_type, test_message)
     registry = get_default_registry()
     result = registry.send(provider_type, test_payload, cfg)
@@ -121,7 +125,7 @@ def _validate_email_config(
                 "error": _("From address required to send test"),
             }
     payload_record = {
-        "subject": _("[%s] Email validation test") % VALIDATION_BRAND,
+        "subject": _("[%s] Email validation test") % _get_validation_brand(),
         "to": to_send if to_send else _("(connection only)"),
     }
     try:
@@ -139,11 +143,11 @@ def _validate_email_config(
             if to_send:
                 from_addr = (config.get("from_email") or "").strip()
                 body_text = _("[%s] Email channel validation test") % (
-                    VALIDATION_BRAND
+                    _get_validation_brand()
                 )
                 msg = MIMEText(body_text, "plain", "utf-8")
                 msg["Subject"] = _("[%s] Email validation test") % (
-                    VALIDATION_BRAND
+                    _get_validation_brand()
                 )
                 msg["From"] = from_addr
                 msg["To"] = to_send
