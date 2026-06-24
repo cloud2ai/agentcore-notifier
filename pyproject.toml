@@ -27,6 +27,9 @@ dev = [
 where = ["."]
 include = ["agentcore_notifier*"]
 
+[tool.setuptools.package-data]
+agentcore_notifier = ["adapters/django/locale/**/*.po", "adapters/django/locale/**/*.mo"]
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
 django_find_project = false
