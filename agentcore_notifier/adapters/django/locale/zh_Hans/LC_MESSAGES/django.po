@@ -1,0 +1,74 @@
+# agentcore-notifier Chinese (Simplified) translations
+msgid ""
+msgstr ""
+"Project-Id-Version: agentcore-notifier\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-25 00:00+0800\n"
+"PO-Revision-Date: 2026-06-25 00:00+0800\n"
+"Language-Team: zh_Hans\n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# views/channels.py — webhook validation
+msgid "Webhook URL not configured"
+msgstr "Webhook 地址未配置，请先填写 Webhook URL"
+
+msgid "[%s] Channel validation test"
+msgstr "[%s] 渠道连通性测试"
+
+msgid "Send failed"
+msgstr "发送失败，请检查 Webhook 地址及网络连通性"
+
+msgid "Validation failed"
+msgstr "验证失败"
+
+# views/channels.py — email validation
+msgid "SMTP host not configured"
+msgstr "SMTP 服务器地址未配置"
+
+msgid "From address required to send test"
+msgstr "发送测试邮件需要先配置发件人地址（From）"
+
+msgid "(connection only)"
+msgstr "（仅测试连接，未发送邮件）"
+
+msgid "[%s] Email validation test"
+msgstr "[%s] 邮件渠道连通性测试"
+
+msgid "[%s] Email channel validation test"
+msgstr "这是来自 [%s] 的邮件渠道连通性测试，收到此邮件说明 SMTP 配置正确。"
+
+msgid ""
+"Server cannot reach SMTP host (no route). "
+"Check deployment: firewall/security group outbound, "
+"or container network. Original: "
+msgstr ""
+"服务器无法访问 SMTP 主机（网络不可达）。"
+"请检查：防火墙/安全组出站规则、容器网络配置是否正确。原始错误："
+
+msgid ""
+"SMTP connection timed out. Check server network and "
+"firewall/proxy. Original: "
+msgstr ""
+"SMTP 连接超时，请检查服务器网络、防火墙或代理配置。原始错误："
+
+# services/webhook_service.py
+msgid "Invalid response format from webhook. Expected JSON but got: {}"
+msgstr "Webhook 返回格式异常，期望 JSON 格式，实际收到：{}"
+
+msgid "Webhook request failed with HTTP status {}. Response: {}"
+msgstr "Webhook 请求失败，HTTP 状态码 {}，响应内容：{}"
+
+msgid ""
+"Webhook validation failed: {}. Please check if the webhook URL is "
+"correct, or verify security settings (e.g., IP whitelist, API key)."
+msgstr ""
+"Webhook 验证失败：{}。请确认 Webhook 地址是否正确，"
+"并检查安全配置（如 IP 白名单、访问密钥）。"
+
+# services/webhook/feishu.py & wechat.py
+msgid "Webhook error code {}"
+msgstr "Webhook 业务错误，错误码 {}"

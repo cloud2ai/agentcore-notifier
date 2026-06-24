@@ -16,6 +16,7 @@ import time
 from typing import Any, Dict, Optional
 
 import requests
+from django.utils.translation import gettext as _
 
 from agentcore_notifier.constants import DEFAULT_TIMEOUT
 
@@ -68,7 +69,7 @@ def _extract_business_error(
             msg = (
                 data.get("msg")
                 or data.get("errmsg")
-                or f"Webhook error code {code}"
+                or _("Webhook error code {}").format(code)
             )
             return True, str(msg)
     return False, None
@@ -91,7 +92,7 @@ class FeishuWebhookDriver(BaseWebhookDriver):
             return {
                 "success": False,
                 "response": None,
-                "error": "Webhook URL not configured",
+                "error": _("Webhook URL not configured"),
             }
         payload_to_send = _apply_message_prefix(
             payload, config.get("message_prefix") or ""

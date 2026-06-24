@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict
 
 import requests
+from django.utils.translation import gettext as _
 
 from agentcore_notifier.constants import DEFAULT_TIMEOUT
 
@@ -26,7 +27,7 @@ class WeChatWebhookDriver(BaseWebhookDriver):
             return {
                 "success": False,
                 "response": None,
-                "error": "Webhook URL not configured",
+                "error": _("Webhook URL not configured"),
             }
         payload_to_send = _apply_message_prefix(
             payload, config.get("message_prefix") or ""
