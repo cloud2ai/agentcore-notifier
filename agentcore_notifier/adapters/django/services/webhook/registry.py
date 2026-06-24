@@ -67,17 +67,14 @@ class WebhookDriverRegistry:
 def get_default_registry() -> WebhookDriverRegistry:
     """Build registry with built-in drivers (feishu, wecom, wechat)."""
     # NOTE(Ray): Lazy import to avoid circular import (registry <- service).
-    from agentcore_notifier.constants import FEISHU_PROVIDERS, Provider
+    from agentcore_notifier.constants import Provider
 
     from .feishu import FeishuWebhookDriver
     from .wechat import WeChatWebhookDriver
 
     reg = WebhookDriverRegistry()
-    reg.register(FeishuWebhookDriver)
-    reg.register(WeChatWebhookDriver)
-    for pt in FEISHU_PROVIDERS:
-        if pt != FeishuWebhookDriver.provider_type:
-            reg._drivers[pt] = FeishuWebhookDriver
-    if Provider.WECHAT not in reg._drivers:
-        reg._drivers[Provider.WECHAT] = WeChatWebhookDriver
+    reg.register(FeishuWebhookDriver)   # feishu
+    reg.register(WeChatWebhookDriver)   # wechat (legacy alias)
+    # wecom is the canonical name for WeCom (企业微信); uses WeCom message format
+    reg._drivers[Provider.WECOM] = WeChatWebhookDriver
     return reg
