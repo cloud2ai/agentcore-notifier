@@ -88,6 +88,23 @@ def send_webhook_notification(
         resolved_channel_id = channel.id if channel else None
         raw_channel_config = (channel.config or {}) if channel else {}
 
+    if merge_and_silence.should_silence_by_time_window(raw_channel_config):
+        logger.info(
+            f"send_webhook_notification: silenced by time window "
+            f"provider_type={provider_type} "
+            f"source={source_app}:{source_type}:{source_id}"
+        )
+        _write_record_with_channel(
+            provider_type,
+            source_app,
+            source_type,
+            source_id,
+            user_id,
+            Status.SILENCED,
+            channel_id=resolved_channel_id,
+        )
+        return {"skipped": True, "reason": "silence_time_window"}
+
     # Resolve silence window from channel config
     silence_window = None
     if raw_channel_config:
@@ -233,6 +250,23 @@ def send_email_notification(
         to_list = [a.strip() for a in (to or []) if (a or "").strip()]
 
     channel_config = raw_config
+
+    if merge_and_silence.should_silence_by_time_window(channel_config):
+        logger.info(
+            f"send_email_notification: silenced by time window "
+            f"source={source_app}:{source_type}:{source_id}"
+        )
+        _write_record_with_channel(
+            Provider.EMAIL,
+            source_app,
+            source_type,
+            source_id,
+            user_id,
+            Status.SILENCED,
+            channel_id=channel_id,
+            channel=Channel.EMAIL,
+        )
+        return {"skipped": True, "reason": "silence_time_window"}
 
     # Resolve silence window from channel config
     silence_window = None

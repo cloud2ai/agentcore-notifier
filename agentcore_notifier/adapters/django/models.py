@@ -178,7 +178,7 @@ class NotificationChannel(models.Model):
         choices=TYPE_CHOICES,
         db_index=True,
     )
-    name = models.CharField(max_length=255, blank=True)
+    name = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(
         default=False,
@@ -205,7 +205,8 @@ class NotificationChannel(models.Model):
         blank=True,
         help_text=(
             "Webhook: provider_type, url, message_prefix, sign_secret, "
-            "merge_*, silence_window_minutes; email: smtp_*, from_email, etc."
+            "merge_*, silence_window_minutes, silence_time_windows; "
+            "email: smtp_*, from_email, etc."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)

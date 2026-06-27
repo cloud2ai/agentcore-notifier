@@ -1,5 +1,6 @@
 """Tests for merge_and_silence service."""
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -206,3 +207,50 @@ class TestMergeAndSilence:
         assert merge_and_silence.should_skip_due_to_merge(
             "feishu", "app", "alert", "1", 15, channel_id=channel.pk + 9999
         ) is False
+
+    def test_should_silence_by_time_window_same_day(self):
+        config = {
+            "silence_time_windows": [
+                {
+                    "enabled": True,
+                    "weekdays": [0, 1, 2],
+                    "start_hour": 9,
+                    "end_hour": 18,
+                }
+            ]
+        }
+        now = datetime(2026, 6, 22, 10, 30, tzinfo=ZoneInfo("UTC"))
+        with timezone.override("UTC"):
+            assert merge_and_silence.should_silence_by_time_window(
+                config, now=now
+            ) is True
+
+    def test_should_silence_by_time_window_cross_midnight(self):
+        config = {
+            "silence_time_windows": [
+                {
+                    "enabled": True,
+                    "weekdays": [0],
+                    "start_hour": 22,
+                    "end_hour": 8,
+                }
+            ]
+        }
+        monday_night = datetime(
+            2026, 6, 22, 23, 0, tzinfo=ZoneInfo("UTC")
+        )
+        tuesday_morning = datetime(
+            2026, 6, 23, 7, 0, tzinfo=ZoneInfo("UTC")
+        )
+        tuesday_day = datetime(2026, 6, 23, 9, 0, tzinfo=ZoneInfo("UTC"))
+
+        with timezone.override("UTC"):
+            assert merge_and_silence.should_silence_by_time_window(
+                config, now=monday_night
+            ) is True
+            assert merge_and_silence.should_silence_by_time_window(
+                config, now=tuesday_morning
+            ) is True
+            assert merge_and_silence.should_silence_by_time_window(
+                config, now=tuesday_day
+            ) is False

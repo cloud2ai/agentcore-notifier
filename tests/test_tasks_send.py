@@ -93,6 +93,41 @@ class TestSendWebhookNotification:
         assert rec.status == Status.SUCCESS
         assert rec.channel_link_id == ch.id
 
+    @patch(
+        "agentcore_notifier.adapters.django.tasks.send."
+        "merge_and_silence.should_silence_by_time_window"
+    )
+    @patch(
+        "agentcore_notifier.adapters.django.services.webhook.feishu."
+        "requests.post"
+    )
+    def test_send_webhook_silenced_by_time_window(
+        self, mock_post, mock_time_window, webhook_channel_config
+    ):
+        mock_time_window.return_value = True
+        NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_WEBHOOK,
+            is_active=True,
+            config=webhook_channel_config,
+        )
+
+        result = send_webhook_notification(
+            payload={"msg_type": "text", "content": {"text": "hello"}},
+            provider_type="feishu",
+            source_app="test_app",
+            source_type="alert",
+            source_id="1",
+        )
+
+        assert result == {"skipped": True, "reason": "silence_time_window"}
+        assert mock_post.called is False
+        rec = NotificationRecord.objects.filter(
+            channel=Channel.WEBHOOK,
+            source_app="test_app",
+        ).first()
+        assert rec is not None
+        assert rec.status == Status.SILENCED
+
 
 @pytest.mark.django_db
 class TestSendEmailNotification:
@@ -159,6 +194,43 @@ class TestSendEmailNotification:
         )
         assert result.get("success") is False
         assert "recipient" in (result.get("error") or "").lower()
+
+    @patch(
+        "agentcore_notifier.adapters.django.tasks.send."
+        "merge_and_silence.should_silence_by_time_window"
+    )
+    @patch(
+        "agentcore_notifier.adapters.django.services.email_service."
+        "smtplib.SMTP"
+    )
+    def test_send_email_silenced_by_time_window(
+        self, mock_smtp_class, mock_time_window, email_channel_config
+    ):
+        mock_time_window.return_value = True
+        NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_EMAIL,
+            is_active=True,
+            config=email_channel_config,
+        )
+
+        result = send_email_notification(
+            subject="Test",
+            body="Body",
+            to=["u@example.com"],
+            source_app="test_app",
+            source_type="alert",
+            source_id="1",
+        )
+
+        assert result == {"skipped": True, "reason": "silence_time_window"}
+        assert mock_smtp_class.called is False
+        rec = NotificationRecord.objects.filter(
+            channel=Channel.EMAIL,
+            provider_type=Provider.EMAIL,
+            source_app="test_app",
+        ).first()
+        assert rec is not None
+        assert rec.status == Status.SILENCED
 
 
 class TestValidateSendNotificationParams:

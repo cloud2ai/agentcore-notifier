@@ -265,6 +265,12 @@ def _channel_to_dict(ch: NotificationChannel) -> dict:
     }
 
 
+def _read_required_channel_name(data: Dict[str, Any]) -> Optional[str]:
+    """Return stripped channel name, or None when missing/blank."""
+    name = (data.get("name") or "").strip()
+    return name or None
+
+
 class NotificationChannelListView(APIView):
     """GET list, POST create."""
 
@@ -299,7 +305,12 @@ class NotificationChannelListView(APIView):
                 {"detail": "channel_type must be webhook or email"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        name = (data.get("name") or "").strip()
+        name = _read_required_channel_name(data)
+        if not name:
+            return Response(
+                {"detail": "name is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         is_active = data.get("is_active", True)
         is_default = bool(data.get("is_default", False))
         config = data.get("config")
@@ -362,8 +373,18 @@ class NotificationChannelDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         data = request.data
+        name = (
+            _read_required_channel_name(data)
+            if "name" in data
+            else (ch.name or "").strip()
+        )
+        if not name:
+            return Response(
+                {"detail": "name is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if "name" in data:
-            ch.name = (data.get("name") or "").strip()
+            ch.name = name
         if "is_active" in data:
             ch.is_active = bool(data["is_active"])
         if "is_default" in data:
