@@ -96,6 +96,21 @@ class TestNotificationChannelListCreate:
         )
         assert response.status_code == 400
 
+    def test_create_channel_blank_name_returns_400(
+        self, api_client, webhook_channel_config
+    ):
+        response = api_client.post(
+            "/channels/",
+            data={
+                "channel_type": "webhook",
+                "name": "  ",
+                "config": webhook_channel_config,
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "name" in response.json().get("detail", "").lower()
+
 
 @pytest.mark.django_db
 class TestNotificationChannelDetail:
@@ -117,6 +132,22 @@ class TestNotificationChannelDetail:
             "/channels/00000000-0000-0000-0000-000000000000/"
         )
         assert response.status_code == 404
+
+    def test_update_channel_blank_name_returns_400(
+        self, api_client, webhook_channel_config
+    ):
+        ch = NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_WEBHOOK,
+            name="Test",
+            config=webhook_channel_config,
+        )
+        response = api_client.put(
+            f"/channels/{ch.uuid}/",
+            data={"name": " ", "config": webhook_channel_config},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "name" in response.json().get("detail", "").lower()
 
 
 @pytest.mark.django_db

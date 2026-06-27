@@ -122,6 +122,100 @@ def should_silence(
     return False
 
 
+def _int_in_range(value: Any, minimum: int, maximum: int) -> Optional[int]:
+    """Return an integer in range, or None when value is invalid."""
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return None
+    if out < minimum or out > maximum:
+        return None
+    return out
+
+
+def _normalize_weekdays(value: Any) -> List[int]:
+    """Normalize weekdays to Python weekday values: Mon=0 ... Sun=6."""
+    if not isinstance(value, list):
+        return []
+    days = []
+    for item in value:
+        day = _int_in_range(item, 0, 6)
+        if day is not None and day not in days:
+            days.append(day)
+    return days
+
+
+def _normalize_time_windows(config: Any) -> List[Dict[str, Any]]:
+    """Read silence time windows from channel config."""
+    if not isinstance(config, dict):
+        return []
+    windows = config.get("silence_time_windows")
+    if isinstance(windows, dict):
+        windows = [windows]
+    if not isinstance(windows, list):
+        legacy_window = config.get("silence_time_window")
+        windows = [legacy_window] if isinstance(legacy_window, dict) else []
+    return [w for w in windows if isinstance(w, dict)]
+
+
+def _matches_time_window(
+    window: Dict[str, Any],
+    now: datetime,
+) -> bool:
+    """
+    Return True when now is inside the configured window.
+
+    Hours are start-inclusive and end-exclusive. If the end is earlier than
+    the start, the window crosses midnight and belongs to the selected start
+    weekdays.
+    """
+    if not window.get("enabled", False):
+        return False
+    weekdays = _normalize_weekdays(window.get("weekdays"))
+    if not weekdays:
+        return False
+    start_hour = _int_in_range(window.get("start_hour"), 0, 23)
+    end_hour = _int_in_range(window.get("end_hour"), 0, 24)
+    if start_hour is None or end_hour is None:
+        return False
+
+    current_day = now.weekday()
+    previous_day = (current_day - 1) % 7
+    current_hour = now.hour
+    if start_hour == end_hour:
+        return current_day in weekdays
+    if start_hour < end_hour:
+        in_hours = start_hour <= current_hour < end_hour
+        return current_day in weekdays and in_hours
+    if current_hour >= start_hour:
+        return current_day in weekdays
+    return previous_day in weekdays and current_hour < end_hour
+
+
+def should_silence_by_time_window(
+    config: Any,
+    now: Optional[datetime] = None,
+) -> bool:
+    """
+    Return True when channel config defines an active silence time window.
+
+    Config format:
+    {
+        "silence_time_windows": [{
+            "enabled": true,
+            "weekdays": [0, 1, 2, 3, 4],
+            "start_hour": 22,
+            "end_hour": 8
+        }]
+    }
+    """
+    current = timezone.localtime(now or timezone.now())
+    for window in _normalize_time_windows(config):
+        if _matches_time_window(window, current):
+            return True
+    return False
+
+
 def merge_key(
     source_app: str,
     source_type: str,
