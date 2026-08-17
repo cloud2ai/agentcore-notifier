@@ -13,6 +13,8 @@ from agentcore_notifier.adapters.django.views.channels import (
     NotificationChannelListView,
     NotificationChannelDetailView,
     ChannelValidateView,
+    FeishuAppRegistrationStartView,
+    FeishuAppRegistrationPollView,
 )
 
 __all__ = [
@@ -25,4 +27,6 @@ __all__ = [
     "NotificationChannelListView",
     "NotificationChannelDetailView",
     "ChannelValidateView",
+    "FeishuAppRegistrationStartView",
+    "FeishuAppRegistrationPollView",
 ]

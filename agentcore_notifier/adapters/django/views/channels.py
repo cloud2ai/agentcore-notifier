@@ -2,6 +2,8 @@
 API views for NotificationChannel: list, create, retrieve, update,
 delete, validate.
 """
+import base64
+import io
 import json
 import logging
 import smtplib
@@ -9,6 +11,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, Optional
 
 # NOTE(Ray): get_user_model at top for channel user; no circular deps.
+import qrcode
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -22,6 +25,9 @@ from rest_framework.views import APIView
 from agentcore_notifier.adapters.django.models import (
     NotificationChannel,
     NotificationRecord,
+)
+from agentcore_notifier.adapters.django.services.feishu_app import (
+    device_registration,
 )
 from agentcore_notifier.adapters.django.services.webhook import (
     get_default_registry,
@@ -237,6 +243,10 @@ def _config_for_api(config: dict, channel_type: str) -> dict:
         out.pop("smtp_password", None)
     elif channel_type == NotificationChannel.TYPE_WEBHOOK:
         out.pop("sign_secret", None)
+    elif channel_type == NotificationChannel.TYPE_FEISHU_APP:
+        out.pop("app_secret", None)
+        out.pop("encrypt_key", None)
+        out.pop("verification_token", None)
     return out
 
 
@@ -533,4 +543,122 @@ class ChannelValidateView(APIView):
                 "error": out.get("error") or _("Validation failed"),
             },
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+def _qr_png_base64(data: str) -> str:
+    img = qrcode.make(data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _upsert_global_feishu_app_channel(
+    client_id: str, client_secret: str, tenant_brand: Optional[str]
+) -> NotificationChannel:
+    """The device-flow success path writes here — this IS the
+    replacement for an admin hand-filling app_id/app_secret. Merges
+    into any existing config (rather than overwriting it wholesale) so
+    a re-scan doesn't wipe out encrypt_key/verification_token set up
+    separately for the event-callback endpoint."""
+    name = (
+        f"Feishu ({tenant_brand})" if tenant_brand else "Feishu"
+    )
+    existing = NotificationChannel.objects.filter(
+        channel_type=NotificationChannel.TYPE_FEISHU_APP,
+        user__isnull=True,
+    ).first()
+    config = (
+        dict(existing.config)
+        if existing and isinstance(existing.config, dict)
+        else {}
+    )
+    config["app_id"] = client_id
+    config["app_secret"] = client_secret
+    if existing:
+        existing.name = name
+        existing.is_active = True
+        existing.config = config
+        existing.save(
+            update_fields=["name", "is_active", "config", "updated_at"]
+        )
+        return existing
+    return NotificationChannel.objects.create(
+        channel_type=NotificationChannel.TYPE_FEISHU_APP,
+        user=None,
+        name=name,
+        is_active=True,
+        config=config,
+    )
+
+
+class FeishuAppRegistrationStartView(APIView):
+    """
+    POST -> begin a device-flow Feishu app registration and return a QR
+    code to scan. Scanning walks the admin through creating (or
+    picking) a self-built app on their own Feishu tenant; completing it
+    is what FeishuAppRegistrationPollView picks up.
+
+    This is the "don't require Django admin" setup path for the global
+    feishu_app channel — see services/feishu_app/device_registration.py
+    for the underlying protocol.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request):
+        state = device_registration.begin_app_registration()
+        if not state:
+            return Response(
+                {"detail": "Failed to start Feishu app registration."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(
+            {
+                "device_code": state["device_code"],
+                "verification_uri_complete": (
+                    state["verification_uri_complete"]
+                ),
+                "qr_code_base64": _qr_png_base64(
+                    state["verification_uri_complete"]
+                ),
+                "interval": state["interval"],
+                "expires_in": state["expires_in"],
+            }
+        )
+
+
+class FeishuAppRegistrationPollView(APIView):
+    """
+    GET ?device_code=... -> one poll attempt against Feishu. The
+    frontend calls this on a timer (same pattern as the PR2 personal
+    bind modal) until status is a terminal one.
+
+    On status == "success", upserts the global (user=None) feishu_app
+    NotificationChannel with the newly-issued client_id/client_secret
+    and returns it — that upsert is the whole mechanism, there's
+    nothing left for an admin to type in afterward.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request):
+        device_code = request.query_params.get("device_code")
+        if not device_code:
+            return Response(
+                {"detail": "device_code is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = device_registration.poll_app_registration(device_code)
+        if result.get("status") != "success":
+            return Response(result)
+
+        channel = _upsert_global_feishu_app_channel(
+            result["client_id"],
+            result["client_secret"],
+            result.get("tenant_brand"),
+        )
+        return Response(
+            {"status": "success", "channel": _channel_to_dict(channel)}
         )
