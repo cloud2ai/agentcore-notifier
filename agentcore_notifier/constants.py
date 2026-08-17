@@ -31,6 +31,13 @@ class Channel:
     WEBHOOK = "webhook"
     EMAIL = "email"
     SMS = "sms"
+    # Feishu self-built app (im/v1/messages, tenant_access_token) — distinct
+    # from WEBHOOK's custom-bot incoming webhook: this can DM a specific
+    # person by open_id, not just post into a group. A channel row of this
+    # type with user=None holds the tenant's app credentials; a row with
+    # user=<someone> holds that person's open_id binding (see the OAuth QR
+    # bind flow) and carries no credentials of its own.
+    FEISHU_APP = "feishu_app"
 
 
 DEFAULT_SOURCE_APP = "unknown"
