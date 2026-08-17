@@ -165,3 +165,61 @@ class TestFeishuAppRegistrationPollView:
         assert resp.status_code == 200
         assert resp.json()["status"] == "error"
         assert not NotificationChannel.objects.exists()
+
+
+@pytest.mark.django_db
+class TestFeishuAppConfigMergeOnPut:
+    """PUT on a feishu_app channel must merge into existing config,
+    never replace it wholesale — app_secret is masked out of every API
+    response, so a client editing e.g. just the callback secrets never
+    legitimately has app_id/app_secret to resend."""
+
+    def test_put_encrypt_key_preserves_app_id_and_secret(self, api_client):
+        ch = NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_FEISHU_APP,
+            user=None,
+            name="Feishu",
+            is_active=True,
+            config={"app_id": "cli_1", "app_secret": "secret_1"},
+        )
+        resp = api_client.put(
+            f"/channels/{ch.uuid}/",
+            data={
+                "config": {
+                    "encrypt_key": "ek-1",
+                    "verification_token": "vt-1",
+                }
+            },
+            format="json",
+        )
+        assert resp.status_code == 200
+        ch.refresh_from_db()
+        assert ch.config["app_id"] == "cli_1"
+        assert ch.config["app_secret"] == "secret_1"
+        assert ch.config["encrypt_key"] == "ek-1"
+        assert ch.config["verification_token"] == "vt-1"
+
+    def test_put_overwrites_only_submitted_keys(self, api_client):
+        ch = NotificationChannel.objects.create(
+            channel_type=NotificationChannel.TYPE_FEISHU_APP,
+            user=None,
+            name="Feishu",
+            is_active=True,
+            config={
+                "app_id": "cli_1",
+                "app_secret": "secret_1",
+                "encrypt_key": "ek-old",
+                "verification_token": "vt-old",
+            },
+        )
+        resp = api_client.put(
+            f"/channels/{ch.uuid}/",
+            data={"config": {"encrypt_key": "ek-new"}},
+            format="json",
+        )
+        assert resp.status_code == 200
+        ch.refresh_from_db()
+        assert ch.config["encrypt_key"] == "ek-new"
+        assert ch.config["verification_token"] == "vt-old"
+        assert ch.config["app_id"] == "cli_1"
+        assert ch.config["app_secret"] == "secret_1"
