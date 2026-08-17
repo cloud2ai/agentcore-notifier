@@ -3,6 +3,7 @@ device-flow app-registration endpoint."""
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from agentcore_notifier.adapters.django.services.feishu_app import (
     device_registration as dr,
@@ -14,9 +15,22 @@ MODULE = (
 )
 
 
-def _response(body):
+def _response(body, status_code=200):
+    """status_code=400 by default for a real requests.Response would
+    raise on .raise_for_status() — reproduce that exactly (not a bare
+    no-op mock) so a regression to calling it would fail these tests,
+    not just live traffic. Confirmed live: Feishu's poll endpoint
+    responds HTTP 400 for authorization_pending/slow_down/
+    access_denied/expired_token — those are expected control-flow
+    states, not request failures, which is why the real code must
+    never call raise_for_status() on this endpoint."""
     resp = MagicMock()
-    resp.raise_for_status = MagicMock()
+    if status_code >= 400:
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            f"{status_code} Client Error"
+        )
+    else:
+        resp.raise_for_status = MagicMock()
     resp.json.return_value = body
     return resp
 
@@ -73,26 +87,35 @@ class TestBeginAppRegistration:
 class TestPollAppRegistration:
     @patch(f"{MODULE}.requests.post")
     def test_pending(self, mock_post):
+        # status_code=400 — matches the real API exactly (see _response's
+        # docstring); this is the case that broke live before the
+        # raise_for_status() call was removed from the source.
         mock_post.return_value = _response(
-            {"error": "authorization_pending"}
+            {"error": "authorization_pending"}, status_code=400,
         )
         assert dr.poll_app_registration("dc-1") == {"status": "pending"}
 
     @patch(f"{MODULE}.requests.post")
     def test_slow_down(self, mock_post):
-        mock_post.return_value = _response({"error": "slow_down"})
+        mock_post.return_value = _response(
+            {"error": "slow_down"}, status_code=400,
+        )
         assert dr.poll_app_registration("dc-1") == {
             "status": "slow_down"
         }
 
     @patch(f"{MODULE}.requests.post")
     def test_denied(self, mock_post):
-        mock_post.return_value = _response({"error": "access_denied"})
+        mock_post.return_value = _response(
+            {"error": "access_denied"}, status_code=400,
+        )
         assert dr.poll_app_registration("dc-1") == {"status": "denied"}
 
     @patch(f"{MODULE}.requests.post")
     def test_expired(self, mock_post):
-        mock_post.return_value = _response({"error": "expired_token"})
+        mock_post.return_value = _response(
+            {"error": "expired_token"}, status_code=400,
+        )
         assert dr.poll_app_registration("dc-1") == {"status": "expired"}
 
     @patch(f"{MODULE}.requests.post")

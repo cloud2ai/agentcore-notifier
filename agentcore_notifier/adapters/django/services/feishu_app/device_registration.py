@@ -67,7 +67,10 @@ def begin_app_registration() -> Optional[Dict[str, Any]]:
             },
             timeout=REQUEST_TIMEOUT,
         )
-        response.raise_for_status()
+        # Deliberately no raise_for_status() — confirmed live that this
+        # endpoint uses HTTP 400 for expected, non-error states (see
+        # poll_app_registration below); reading the body regardless of
+        # status code is the only way that's compatible with both.
         data = response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"begin_app_registration: request failed: {e}")
@@ -117,7 +120,12 @@ def poll_app_registration(device_code: str) -> Dict[str, Any]:
             },
             timeout=REQUEST_TIMEOUT,
         )
-        response.raise_for_status()
+        # No raise_for_status() — confirmed live against the real API:
+        # this endpoint responds HTTP 400 for authorization_pending (a
+        # normal "not yet" state, polled repeatedly by design), not
+        # just for genuine errors. A 400 here is not an HTTP failure,
+        # the body's "error" field is what actually carries meaning —
+        # see _STATUS_BY_ERROR below.
         data = response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"poll_app_registration: request failed: {e}")
