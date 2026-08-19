@@ -247,6 +247,8 @@ def _config_for_api(config: dict, channel_type: str) -> dict:
         out.pop("app_secret", None)
         out.pop("encrypt_key", None)
         out.pop("verification_token", None)
+    elif channel_type == NotificationChannel.TYPE_WECOM_BOT:
+        out.pop("secret", None)
     return out
 
 
