@@ -38,6 +38,15 @@ class Channel:
     # user=<someone> holds that person's open_id binding (see the OAuth QR
     # bind flow) and carries no credentials of its own.
     FEISHU_APP = "feishu_app"
+    # WeCom AI Bot (qyapi.weixin.qq.com/cli message gateway) — WeCom's
+    # analog of FEISHU_APP: distinct from WEBHOOK's group-robot webhook,
+    # this DMs a specific person by userid. Unlike FEISHU_APP there is no
+    # separate "global app + per-user bind" split — device-flow
+    # registration (services/wecom/device_registration.py) hands back the
+    # bot's own botid/secret *and* the scanning user's userid together, so
+    # every row of this type is per-user (user=<someone>) and
+    # self-contained; there is no user=None variant.
+    WECOM_BOT = "wecom_bot"
 
 
 DEFAULT_SOURCE_APP = "unknown"
