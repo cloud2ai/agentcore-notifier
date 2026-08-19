@@ -448,16 +448,21 @@ class NotificationChannelDetailView(APIView):
                         ch.config.get("sign_secret") or ""
                     )
                 elif (
-                    ch.channel_type == NotificationChannel.TYPE_FEISHU_APP
+                    ch.channel_type in (
+                        NotificationChannel.TYPE_FEISHU_APP,
+                        NotificationChannel.TYPE_WECOM_BOT,
+                    )
                     and isinstance(ch.config, dict)
                 ):
                     # Always merge, not just when a secret is blank —
-                    # app_id/app_secret arrive via the device-flow scan
-                    # (a completely separate write path) and app_secret
-                    # is masked out of every API response, so a client
-                    # editing e.g. just encrypt_key/verification_token
-                    # here never legitimately has app_secret to resend.
-                    # A wholesale replace would silently null it out.
+                    # app_id/app_secret (feishu_app) and bot_id/secret/
+                    # userid (wecom_bot) all arrive via their own
+                    # device-flow scan (a completely separate write
+                    # path from this PUT), and the secret is masked out
+                    # of every API response either way, so a client
+                    # editing e.g. just name/is_active here never
+                    # legitimately has it to resend. A wholesale
+                    # replace would silently null it out.
                     merged = dict(ch.config)
                     merged.update(cfg)
                 if merged is not None:
