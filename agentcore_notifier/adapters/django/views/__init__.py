@@ -12,6 +12,7 @@ from agentcore_notifier.adapters.django.views.config import (
 from agentcore_notifier.adapters.django.views.channels import (
     NotificationChannelListView,
     NotificationChannelDetailView,
+    NotificationChannelTestView,
     ChannelValidateView,
     FeishuAppRegistrationStartView,
     FeishuAppRegistrationPollView,
@@ -26,6 +27,7 @@ __all__ = [
     "SilenceRulesView",
     "NotificationChannelListView",
     "NotificationChannelDetailView",
+    "NotificationChannelTestView",
     "ChannelValidateView",
     "FeishuAppRegistrationStartView",
     "FeishuAppRegistrationPollView",

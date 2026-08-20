@@ -14,6 +14,7 @@ from agentcore_notifier.adapters.django.views import (
     SilenceRulesView,
     NotificationChannelListView,
     NotificationChannelDetailView,
+    NotificationChannelTestView,
     ChannelValidateView,
     FeishuAppRegistrationStartView,
     FeishuAppRegistrationPollView,
@@ -54,6 +55,11 @@ urlpatterns = [
         "channels/<uuid:uuid>/",
         NotificationChannelDetailView.as_view(),
         name="notifier-channels-detail",
+    ),
+    path(
+        "channels/<uuid:uuid>/test/",
+        NotificationChannelTestView.as_view(),
+        name="notifier-channels-test",
     ),
     path(
         "channels/feishu-app/register/start/",

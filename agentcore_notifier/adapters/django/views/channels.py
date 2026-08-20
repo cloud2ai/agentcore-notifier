@@ -26,6 +26,7 @@ from agentcore_notifier.adapters.django.models import (
     NotificationChannel,
     NotificationRecord,
 )
+from agentcore_notifier.adapters.django.services import notification_test
 from agentcore_notifier.adapters.django.services.feishu_app import (
     device_registration,
 )
@@ -486,6 +487,26 @@ class NotificationChannelDetailView(APIView):
             )
         ch.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationChannelTestView(APIView):
+    """POST -> send a real test message through an already-created
+    channel. feishu_app/wecom_bot have no pre-creation config to
+    validate the way webhook/email do (see ChannelValidateView) —
+    this is their only way to confirm a scan actually worked, for any
+    channel by uuid (admin visibility, not scoped to one user)."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request: Request, uuid):
+        ch = NotificationChannel.objects.filter(uuid=uuid).first()
+        if not ch:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        result = notification_test.send_test_message(ch)
+        return Response(result)
 
 
 class ChannelValidateView(APIView):
