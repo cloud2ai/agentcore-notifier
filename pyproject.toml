@@ -1,19 +1,43 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentcore-notifier"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Notification management module (webhook, email) for Django"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Cloud2AI" }]
+keywords = ["django", "celery", "notification", "webhook", "email", "agentcore"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Framework :: Celery",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "django>=4.2",
     "requests>=2.28.0",
     "celery>=5.0",
     "djangorestframework>=3.14",
-    "agentcore-task",
+    "agentcore-task>=0.1.0",
     "pycryptodome>=3.20.0",
     "qrcode[pil]>=7.4",
 ]
@@ -25,12 +49,24 @@ dev = [
     "pytest-cov",
 ]
 
+[project.urls]
+Homepage = "https://github.com/cloud2ai/agentcore-notifier"
+Repository = "https://github.com/cloud2ai/agentcore-notifier"
+Issues = "https://github.com/cloud2ai/agentcore-notifier/issues"
+Changelog = "https://github.com/cloud2ai/agentcore-notifier/releases"
+
+[tool.setuptools.dynamic]
+version = { attr = "agentcore_notifier.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agentcore_notifier*"]
 
 [tool.setuptools.package-data]
-agentcore_notifier = ["adapters/django/locale/**/*.po", "adapters/django/locale/**/*.mo"]
+"agentcore_notifier.adapters.django" = [
+    "locale/*/LC_MESSAGES/*.po",
+    "locale/*/LC_MESSAGES/*.mo",
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
