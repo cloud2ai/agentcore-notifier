@@ -163,12 +163,14 @@ class NotificationChannel(models.Model):
     TYPE_SMS = Channel.SMS
     TYPE_FEISHU_APP = Channel.FEISHU_APP
     TYPE_WECOM_BOT = Channel.WECOM_BOT
+    TYPE_WECOM_APP = Channel.WECOM_APP
     TYPE_CHOICES = [
         (TYPE_WEBHOOK, "Webhook"),
         (TYPE_EMAIL, "Email"),
         (TYPE_SMS, "SMS"),
         (TYPE_FEISHU_APP, "Feishu App"),
-        (TYPE_WECOM_BOT, "WeCom Bot"),
+        (TYPE_WECOM_BOT, "WeCom Bot (deprecated, 7-day auth)"),
+        (TYPE_WECOM_APP, "WeCom App"),
     ]
 
     uuid = models.UUIDField(

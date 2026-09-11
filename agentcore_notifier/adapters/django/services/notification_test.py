@@ -1,6 +1,6 @@
 """
 Ad-hoc "does this channel actually work" test send for feishu_app and
-wecom_bot channels.
+wecom_app channels.
 
 Both types are entirely scan-driven with no manual config to validate
 before creation the way webhook/email channels can (see
@@ -27,6 +27,7 @@ from agentcore_notifier.constants import Provider, Status
 from ..models import NotificationChannel, NotificationRecord
 from .feishu_app.client import send_card_dm
 from .wecom.client import send_aibot_markdown
+from .wecom_app.client import send_app_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -161,14 +162,16 @@ def _send_test_feishu(channel: NotificationChannel) -> Dict[str, Any]:
     return result
 
 
-def _send_test_wecom(channel: NotificationChannel) -> Dict[str, Any]:
+def _send_test_wecom_bot(channel: NotificationChannel) -> Dict[str, Any]:
+    """Deprecated path, kept for channels already configured against the
+    AI Bot gateway. Its message permission lapses after 7 days, so a
+    failure here is far more often an expired authorization (850003) than
+    a wrong credential -- see Channel.WECOM_BOT."""
     cfg = channel.config if isinstance(channel.config, dict) else {}
     bot_id = (cfg.get("bot_id") or "").strip()
     secret = (cfg.get("secret") or "").strip()
     userid = (cfg.get("userid") or "").strip()
     if not (bot_id and secret and userid):
-        # Never reaches a real send, so nothing to record — same rule
-        # as the missing-open_id case above.
         return {
             "success": False,
             "response": None,
@@ -184,14 +187,43 @@ def _send_test_wecom(channel: NotificationChannel) -> Dict[str, Any]:
     return result
 
 
+def _send_test_wecom_app(channel: NotificationChannel) -> Dict[str, Any]:
+    cfg = channel.config if isinstance(channel.config, dict) else {}
+    corp_id = (cfg.get("corp_id") or "").strip()
+    corp_secret = (cfg.get("corp_secret") or "").strip()
+    agent_id = str(cfg.get("agent_id") or "").strip()
+    touser = (cfg.get("touser") or "").strip()
+    if not (corp_id and corp_secret and agent_id and touser):
+        # Never reaches a real send, so nothing to record — same rule
+        # as the missing-open_id case above.
+        return {
+            "success": False,
+            "response": None,
+            "error": "该渠道配置不完整，无法测试。",
+        }
+    payload = {
+        "touser": touser,
+        "msgtype": "markdown",
+        "agentid": agent_id,
+        "markdown": {"content": TEST_MARKDOWN_CONTENT},
+    }
+    result = send_app_markdown(
+        touser, TEST_MARKDOWN_CONTENT, corp_id, corp_secret, agent_id
+    )
+    _record_test_send(channel, Provider.WECOM, payload, result)
+    return result
+
+
 def send_test_message(channel: NotificationChannel) -> Dict[str, Any]:
     """Returns {success, response, error} — same shape as
-    send_card_dm/send_aibot_markdown, so callers don't need a third
+    send_card_dm/send_app_markdown, so callers don't need a third
     convention."""
     if channel.channel_type == NotificationChannel.TYPE_FEISHU_APP:
         return _send_test_feishu(channel)
+    if channel.channel_type == NotificationChannel.TYPE_WECOM_APP:
+        return _send_test_wecom_app(channel)
     if channel.channel_type == NotificationChannel.TYPE_WECOM_BOT:
-        return _send_test_wecom(channel)
+        return _send_test_wecom_bot(channel)
     return {
         "success": False,
         "response": None,

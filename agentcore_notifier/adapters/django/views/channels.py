@@ -250,6 +250,8 @@ def _config_for_api(config: dict, channel_type: str) -> dict:
         out.pop("verification_token", None)
     elif channel_type == NotificationChannel.TYPE_WECOM_BOT:
         out.pop("secret", None)
+    elif channel_type == NotificationChannel.TYPE_WECOM_APP:
+        out.pop("corp_secret", None)
     return out
 
 
@@ -452,18 +454,19 @@ class NotificationChannelDetailView(APIView):
                     ch.channel_type in (
                         NotificationChannel.TYPE_FEISHU_APP,
                         NotificationChannel.TYPE_WECOM_BOT,
+                        NotificationChannel.TYPE_WECOM_APP,
                     )
                     and isinstance(ch.config, dict)
                 ):
-                    # Always merge, not just when a secret is blank —
-                    # app_id/app_secret (feishu_app) and bot_id/secret/
-                    # userid (wecom_bot) all arrive via their own
-                    # device-flow scan (a completely separate write
-                    # path from this PUT), and the secret is masked out
-                    # of every API response either way, so a client
-                    # editing e.g. just name/is_active here never
-                    # legitimately has it to resend. A wholesale
-                    # replace would silently null it out.
+                    # Always merge, not just when a secret is blank.
+                    # feishu_app's app_id/app_secret and wecom_bot's
+                    # bot_id/secret/userid arrive via their own
+                    # device-flow scan, a separate write path from this
+                    # PUT; wecom_app's corp_secret is typed in once and
+                    # then masked out of every API response. Either way
+                    # a client editing just name/is_active never
+                    # legitimately holds the secret to resend, and a
+                    # wholesale replace would silently null it out.
                     merged = dict(ch.config)
                     merged.update(cfg)
                 if merged is not None:
@@ -491,7 +494,7 @@ class NotificationChannelDetailView(APIView):
 
 class NotificationChannelTestView(APIView):
     """POST -> send a real test message through an already-created
-    channel. feishu_app/wecom_bot have no pre-creation config to
+    channel. feishu_app/wecom_* have no pre-creation config to
     validate the way webhook/email do (see ChannelValidateView) —
     this is their only way to confirm a scan actually worked, for any
     channel by uuid (admin visibility, not scoped to one user)."""
