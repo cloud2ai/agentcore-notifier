@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 SEND_MESSAGE_URL = "https://qyapi.weixin.qq.com/cgi-bin/message/send"
 REQUEST_TIMEOUT = 15
+# WeCom's documented wildcard: "指定为@all，则向该企业应用的全部成员发送".
+# "All members" means all members *of this app's visible scope*, which the
+# admin chose when creating the app — not the whole company. That makes it
+# a safe default for the common single-recipient setup, and it spares the
+# user hunting their own UserID in 通讯录, which is easy to confuse with a
+# phone number or display name.
+ALL_MEMBERS = "@all"
 # WeCom's "access_token expired/invalid" codes. Seeing one of these means
 # the cached token is dead regardless of its TTL, so it is dropped and the
 # send retried once -- otherwise every send until the TTL lapses would
@@ -49,20 +56,26 @@ def send_app_markdown(
     corp_secret: str,
     agent_id: str,
 ) -> Dict[str, Any]:
-    """Send a markdown app message to one member.
+    """Send a markdown app message.
+
+    `touser` is a member's UserID, or falsy to fall back to ALL_MEMBERS —
+    WeCom requires one of touser/toparty/totag to be set, and @all is the
+    documented way to say "whoever this app is visible to". It is not
+    required config: an app scoped to one person delivers to that person
+    either way.
 
     Returns {"success": bool, "response": dict|None, "error": str|None}
     rather than raising: delivery is best-effort and must never fail the
     workflow that produced the message.
     """
-    if not (touser and corp_id and corp_secret and agent_id):
+    if not (corp_id and corp_secret and agent_id):
         return {
             "success": False, "response": None,
             "error": "incomplete wecom app config",
         }
 
     body = {
-        "touser": touser,
+        "touser": (touser or "").strip() or ALL_MEMBERS,
         "msgtype": "markdown",
         "agentid": agent_id,
         "markdown": {"content": markdown},
