@@ -27,7 +27,7 @@ from agentcore_notifier.constants import Provider, Status
 from ..models import NotificationChannel, NotificationRecord
 from .feishu_app.client import send_card_dm
 from .wecom.client import send_aibot_markdown
-from .wecom_app.client import send_app_markdown
+from .wecom_app.client import ALL_MEMBERS, send_app_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -192,8 +192,10 @@ def _send_test_wecom_app(channel: NotificationChannel) -> Dict[str, Any]:
     corp_id = (cfg.get("corp_id") or "").strip()
     corp_secret = (cfg.get("corp_secret") or "").strip()
     agent_id = str(cfg.get("agent_id") or "").strip()
+    # touser is optional: send_app_markdown falls back to @all, which
+    # WeCom scopes to the app's visible members.
     touser = (cfg.get("touser") or "").strip()
-    if not (corp_id and corp_secret and agent_id and touser):
+    if not (corp_id and corp_secret and agent_id):
         # Never reaches a real send, so nothing to record — same rule
         # as the missing-open_id case above.
         return {
@@ -202,7 +204,7 @@ def _send_test_wecom_app(channel: NotificationChannel) -> Dict[str, Any]:
             "error": "该渠道配置不完整，无法测试。",
         }
     payload = {
-        "touser": touser,
+        "touser": touser or ALL_MEMBERS,
         "msgtype": "markdown",
         "agentid": agent_id,
         "markdown": {"content": TEST_MARKDOWN_CONTENT},

@@ -160,14 +160,67 @@ class TestSendAppMarkdown:
 
     @patch(f"{CLIENT_MODULE}.fetch_access_token")
     @patch(f"{CLIENT_MODULE}.requests.post")
-    def test_incomplete_config_never_reaches_the_network(self, post, tok):
+    def test_incomplete_credentials_never_reach_the_network(self, post, tok):
+        """A missing touser is NOT incomplete config — see
+        TestRecipientFallback. Only the app credentials are required."""
         for args in (
-            ("", "# hi", CORP, SECRET, AGENT),
             (USER, "# hi", "", SECRET, AGENT),
             (USER, "# hi", CORP, "", AGENT),
             (USER, "# hi", CORP, SECRET, ""),
         ):
             result = client.send_app_markdown(*args)
             assert result["success"] is False
+        post.assert_not_called()
+        tok.assert_not_called()
+
+
+@pytest.mark.unit
+class TestRecipientFallback:
+    """touser is optional. WeCom requires one of touser/toparty/totag, and
+    @all means "every member this app is visible to" — which the admin
+    chose when creating the app, not the whole company. Requiring a
+    UserID would make people hunt it down in 通讯录, where it is easily
+    confused with a phone number or display name.
+    """
+
+    @patch(f"{CLIENT_MODULE}.fetch_access_token", return_value="tok-1")
+    @patch(f"{CLIENT_MODULE}.requests.post")
+    def test_missing_touser_falls_back_to_all_members(self, post, _tok):
+        post.return_value = _resp({"errcode": 0, "errmsg": "ok"})
+
+        result = client.send_app_markdown("", "# hi", CORP, SECRET, AGENT)
+
+        assert result["success"] is True
+        assert post.call_args.kwargs["json"]["touser"] == client.ALL_MEMBERS
+
+    @patch(f"{CLIENT_MODULE}.fetch_access_token", return_value="tok-1")
+    @patch(f"{CLIENT_MODULE}.requests.post")
+    def test_whitespace_only_touser_is_treated_as_missing(self, post, _tok):
+        post.return_value = _resp({"errcode": 0, "errmsg": "ok"})
+
+        client.send_app_markdown("   ", "# hi", CORP, SECRET, AGENT)
+
+        assert post.call_args.kwargs["json"]["touser"] == client.ALL_MEMBERS
+
+    @patch(f"{CLIENT_MODULE}.fetch_access_token", return_value="tok-1")
+    @patch(f"{CLIENT_MODULE}.requests.post")
+    def test_an_explicit_touser_still_wins(self, post, _tok):
+        post.return_value = _resp({"errcode": 0, "errmsg": "ok"})
+
+        client.send_app_markdown(USER, "# hi", CORP, SECRET, AGENT)
+
+        assert post.call_args.kwargs["json"]["touser"] == USER
+
+    @patch(f"{CLIENT_MODULE}.fetch_access_token")
+    @patch(f"{CLIENT_MODULE}.requests.post")
+    def test_the_app_credentials_are_still_required(self, post, tok):
+        """Relaxing touser must not relax the rest — without an agent_id
+        the request cannot be addressed at all."""
+        for args in (
+            ("", "# hi", "", SECRET, AGENT),
+            ("", "# hi", CORP, "", AGENT),
+            ("", "# hi", CORP, SECRET, ""),
+        ):
+            assert client.send_app_markdown(*args)["success"] is False
         post.assert_not_called()
         tok.assert_not_called()
