@@ -385,3 +385,46 @@ class TestWecomAppValidation:
         assert response.status_code == 400
         assert "1.2.3.4" in response.json()["error"]
         assert not send.called, "a 60020 config cannot send; do not try"
+
+
+class TestGlobalFeishuCredentialLookup:
+    """An incomplete global channel must not shadow a working one.
+
+    The lookup used to take .first() on an unordered queryset and give up
+    if that row had no credentials. Harmless while the type could not be
+    created by hand; reachable the moment the admin endpoint accepts it,
+    and the failure mode is every Feishu notification stopping at once.
+    """
+
+    def test_an_empty_global_channel_does_not_shadow_a_working_one(self, db):
+        from agentcore_notifier.adapters.django.models import (
+            NotificationChannel,
+        )
+        from agentcore_notifier.adapters.django.services.notification_test \
+            import _global_feishu_app_credentials
+
+        NotificationChannel.objects.create(
+            user=None, channel_type=NotificationChannel.TYPE_FEISHU_APP,
+            name="empty", is_active=True, config={},
+        )
+        NotificationChannel.objects.create(
+            user=None, channel_type=NotificationChannel.TYPE_FEISHU_APP,
+            name="real", is_active=True,
+            config={"app_id": "cli_x", "app_secret": "s"},
+        )
+
+        assert _global_feishu_app_credentials() == ("cli_x", "s")
+
+    def test_no_credentials_anywhere_still_returns_none(self, db):
+        from agentcore_notifier.adapters.django.models import (
+            NotificationChannel,
+        )
+        from agentcore_notifier.adapters.django.services.notification_test \
+            import _global_feishu_app_credentials
+
+        NotificationChannel.objects.create(
+            user=None, channel_type=NotificationChannel.TYPE_FEISHU_APP,
+            name="empty", is_active=True, config={},
+        )
+
+        assert _global_feishu_app_credentials() is None

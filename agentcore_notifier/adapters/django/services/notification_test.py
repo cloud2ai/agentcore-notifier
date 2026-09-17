@@ -99,18 +99,26 @@ def _global_feishu_app_credentials():
     """Same lookup as trendforge.services.notification_card's
     _get_global_app_config, duplicated here rather than imported —
     trendforge depends on this submodule, not the other way around."""
-    channel = NotificationChannel.objects.filter(
+    # Pick a row that actually carries credentials rather than an
+    # arbitrary first one. .first() on an unordered queryset returns
+    # whatever the database offers, so a single incomplete global channel
+    # -- easy to create by hand now that the admin endpoint accepts this
+    # type -- could shadow the working one and silently stop every Feishu
+    # notification. Skipping the empties makes that impossible instead of
+    # unlikely.
+    channels = NotificationChannel.objects.filter(
         channel_type=NotificationChannel.TYPE_FEISHU_APP,
         user__isnull=True,
         is_active=True,
-    ).first()
-    if not channel or not isinstance(channel.config, dict):
-        return None
-    app_id = (channel.config.get("app_id") or "").strip()
-    app_secret = (channel.config.get("app_secret") or "").strip()
-    if not (app_id and app_secret):
-        return None
-    return app_id, app_secret
+    ).order_by("id")
+    for channel in channels:
+        if not isinstance(channel.config, dict):
+            continue
+        app_id = (channel.config.get("app_id") or "").strip()
+        app_secret = (channel.config.get("app_secret") or "").strip()
+        if app_id and app_secret:
+            return app_id, app_secret
+    return None
 
 
 def _send_test_feishu(channel: NotificationChannel) -> Dict[str, Any]:
