@@ -12,6 +12,14 @@ from typing import Any, Dict, Optional
 
 # NOTE(Ray): get_user_model at top for channel user; no circular deps.
 import qrcode
+import requests
+
+from agentcore_notifier.adapters.django.services.wecom_app.client import (
+    send_app_markdown,
+)
+from agentcore_notifier.adapters.django.services.wecom_app.token import (
+    fetch_access_token,
+)
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -290,6 +298,20 @@ def _read_required_channel_name(data: Dict[str, Any]) -> Optional[str]:
     return name or None
 
 
+# Every channel type that has a working sender behind it. This used to
+# be an inline (webhook, email) tuple, which quietly diverged from what
+# the model offers and what admin UIs put in their dropdown: picking
+# "WeCom App" returned "channel_type must be webhook or email" and the
+# channel could not be created at all. Deriving it from the model's own
+# choices keeps that drift from coming back -- a new type is creatable as
+# soon as it is a choice, and SMS stays out because nothing sends it.
+CREATABLE_CHANNEL_TYPES = frozenset(
+    value
+    for value, _label in NotificationChannel.TYPE_CHOICES
+    if value != NotificationChannel.TYPE_SMS
+)
+
+
 class NotificationChannelListView(APIView):
     """GET list, POST create."""
 
@@ -316,12 +338,14 @@ class NotificationChannelListView(APIView):
     def post(self, request: Request):
         data = request.data
         channel_type = (data.get("channel_type") or "").strip().lower()
-        if channel_type not in (
-            NotificationChannel.TYPE_WEBHOOK,
-            NotificationChannel.TYPE_EMAIL,
-        ):
+        if channel_type not in CREATABLE_CHANNEL_TYPES:
             return Response(
-                {"detail": "channel_type must be webhook or email"},
+                {
+                    "detail": (
+                        "channel_type must be one of: %s"
+                        % ", ".join(sorted(CREATABLE_CHANNEL_TYPES))
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         name = _read_required_channel_name(data)
@@ -512,6 +536,128 @@ class NotificationChannelTestView(APIView):
         return Response(result)
 
 
+WECOM_AGENT_GET_URL = "https://qyapi.weixin.qq.com/cgi-bin/agent/get"
+WECOM_VALIDATE_TIMEOUT = 15
+WECOM_PROBE_MARKDOWN = (
+    "**Notification channel test**\n\n"
+    "This message was sent by the channel settings page. Seeing it "
+    "means notifications will reach you here."
+)
+
+
+def _validate_wecom_app_config(config):
+    """Check WeCom self-built app credentials by actually delivering.
+
+    Three calls, and each earns its place:
+
+    - ``gettoken`` proves the CorpID and Secret. On its own it proves very
+      little else: the token exchange is NOT subject to the app's
+      trusted-IP list, so a config that cannot send a single message
+      (errcode 60020) passes it.
+    - ``agent/get`` IS subject to that list, and names the rejected IP in
+      its errmsg -- which is the one piece of information needed to fix it.
+    - ``message/send`` is the only call that proves a message reaches a
+      phone. Neither of the first two can see whether the recipient falls
+      inside the app's visible range, nor whether a typo'd UserID matches
+      anybody, so a config delivering to nobody passed a two-call check.
+
+    ``invaliduser`` needs its own check: WeCom returns errcode 0 even when
+    it dropped every recipient, so a bare errcode test calls a delivery to
+    nobody a success -- the exact "validated fine, nothing arrived" report
+    this validator exists to prevent.
+    """
+    corp_id = (config.get("corp_id") or "").strip()
+    corp_secret = (config.get("corp_secret") or "").strip()
+    agent_id = str(config.get("agent_id") or "").strip()
+    if not corp_id:
+        return {"success": False, "error": _("CorpID is required")}
+    if not corp_secret:
+        return {"success": False, "error": _("App Secret is required")}
+    if not agent_id:
+        return {"success": False, "error": _("AgentId is required")}
+
+    token = fetch_access_token(corp_id, corp_secret, agent_id)
+    if not token:
+        return {
+            "success": False,
+            "error": _(
+                "WeCom rejected these credentials. Check CorpID and App "
+                "Secret; the Secret belongs to the app, not the company."
+            ),
+        }
+
+    try:
+        response = requests.get(
+            WECOM_AGENT_GET_URL,
+            params={"access_token": token, "agentid": agent_id},
+            timeout=WECOM_VALIDATE_TIMEOUT,
+        )
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return {
+            "success": False,
+            "error": _("Could not reach WeCom. Check network and retry."),
+        }
+
+    errcode = data.get("errcode")
+    if errcode:
+        errmsg = str(data.get("errmsg") or "")
+        if errcode == 60020:
+            return {
+                "success": False,
+                "error": _(
+                    "WeCom refused the request from this server's IP. Add "
+                    "it to the app's trusted-IP list. WeCom reported: "
+                    "%(msg)s"
+                ) % {"msg": errmsg[:160]},
+            }
+        return {
+            "success": False,
+            "error": _("WeCom returned errcode %(code)s: %(msg)s") % {
+                "code": errcode, "msg": errmsg[:160],
+            },
+        }
+
+    result = send_app_markdown(
+        (config.get("touser") or "").strip(),
+        WECOM_PROBE_MARKDOWN,
+        corp_id,
+        corp_secret,
+        agent_id,
+    )
+    if not result.get("success"):
+        return {
+            "success": False,
+            "error": _(
+                "WeCom accepted the credentials but the test message "
+                "failed: %(err)s"
+            ) % {"err": str(result.get("error") or "")[:160]},
+        }
+    invalid = str((result.get("response") or {}).get("invaliduser") or "")
+    if invalid.strip():
+        return {
+            "success": False,
+            "error": _(
+                "WeCom rejected recipient(s) %(who)s. Add them to the "
+                "app's visible range, or clear the UserID to send to "
+                "everyone the app can reach."
+            ) % {"who": invalid.strip()[:80]},
+        }
+    return {"success": True, "error": ""}
+
+
+# Types whose credentials can be checked before the channel is saved.
+# feishu_app is absent on purpose: it has no pre-creation config to check
+# -- its credentials arrive through the scan registration flow, and
+# NotificationChannelTestView is how a finished feishu_app channel is
+# confirmed.
+VALIDATABLE_CHANNEL_TYPES = frozenset({
+    NotificationChannel.TYPE_WEBHOOK,
+    NotificationChannel.TYPE_EMAIL,
+    NotificationChannel.TYPE_WECOM_APP,
+})
+
+
 class ChannelValidateView(APIView):
     """
     POST to validate channel config without saving.
@@ -524,12 +670,14 @@ class ChannelValidateView(APIView):
     def post(self, request: Request):
         data = request.data
         channel_type = (data.get("channel_type") or "").strip().lower()
-        if channel_type not in (
-            NotificationChannel.TYPE_WEBHOOK,
-            NotificationChannel.TYPE_EMAIL,
-        ):
+        if channel_type not in VALIDATABLE_CHANNEL_TYPES:
             return Response(
-                {"detail": "channel_type must be webhook or email"},
+                {
+                    "detail": (
+                        "channel_type must be one of: %s"
+                        % ", ".join(sorted(VALIDATABLE_CHANNEL_TYPES))
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         config = data.get("config")
@@ -574,6 +722,8 @@ class ChannelValidateView(APIView):
             user_id = None
         if channel_type == NotificationChannel.TYPE_WEBHOOK:
             out = _validate_webhook_config(config, user_id=user_id)
+        elif channel_type == NotificationChannel.TYPE_WECOM_APP:
+            out = _validate_wecom_app_config(config)
         else:
             test_recipient = (data.get("test_recipient") or "").strip() or None
             out = _validate_email_config(
